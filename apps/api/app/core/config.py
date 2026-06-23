@@ -43,7 +43,7 @@ class Config:
 
     # AI API configuration - Claude (Anthropic)
     CLAUDE_API_KEY=os.getenv("CLAUDE_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
-    CLAUDE_MODEL=os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+    CLAUDE_MODEL=os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
     
     # Legacy Gemini support (deprecated)
     GEMINI_API_KEY=os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")

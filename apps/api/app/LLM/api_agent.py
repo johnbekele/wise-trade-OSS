@@ -2,157 +2,314 @@ from typing import Optional, Dict, Any, List
 import json
 import re
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from anthropic import Anthropic
 from app.core.config import settings
+from app.services.yahoo_finance_service import YahooFinanceService
 
 _cache = {}
 _cache_ttl = {}
 
-ANALYZE_SYSTEM_PROMPT = """You are an expert financial analyst AI agent. Your role is to:
-1. Use web search to find the latest relevant financial news based on user queries
-2. Analyze the fetched news to identify market-moving events
-3. Provide comprehensive insights in a structured format
+# ── Phase 1A: Stock data collector ──────────────────────────────────────────
 
-IMPORTANT: Format your response using markdown-style structure:
-- Use section headers: "### 1. Most Impactful News Items"
-- Use numbered items with bold titles: "1. **News Title**"
-- Use bullet points for details: "* Why it matters: ..."
+STOCK_PATTERN_SYSTEM = """You are a quantitative market analyst. You will receive raw stock market data
+(prices, volume, movers, chart data). Your job is to:
 
-Structure your response with these sections:
-1. Most Impactful News Items and Why They Matter
-2. Which Companies or Sectors Are Affected
-3. Potential Market Impact (high/medium/low) and Direction (positive/negative)
-4. Actionable Insights for Traders
+1. Identify price patterns and anomalies (unusual volume, gap ups/downs, breakouts)
+2. Spot sector rotations or correlated moves across stocks
+3. Flag any technical signals (momentum shifts, support/resistance levels)
+4. Summarize the current market sentiment based on the data
 
-Search for the most recent news. Be concise and efficient."""
+Return a structured analysis in this format:
+### Market Data Patterns
+- Key observations from prices and volume
+### Unusual Activity
+- Stocks with abnormal moves or volume
+### Sector Signals
+- Which sectors are strong/weak
+### Technical Flags
+- Notable patterns or levels
 
-MARKET_IMPACT_SYSTEM_PROMPT = """You are a financial news analysis agent. Your task is to:
-1. Search the web for the latest top financial and market-moving news
-2. Analyze and rank the news by market impact
-3. Return your analysis as a JSON object with this EXACT structure:
+Be data-driven. Reference specific numbers."""
 
-{{"news_items": [{{"rank": 1, "title": "News headline", "impact_level": "high|medium|low", "impact_direction": "positive|negative|neutral", "why_it_matters": "Brief explanation", "affected_sectors": ["sector1"], "affected_companies": ["company1"], "trading_insight": "Actionable insight", "source": "source name"}}]}}
+# ── Phase 1B: Web intelligence collector ────────────────────────────────────
 
-CRITICAL: Return ONLY valid JSON after your analysis. No markdown code fences."""
+WEB_INTEL_SYSTEM = """You are a financial intelligence researcher. Your job is to cast a WIDE net
+across the internet to find everything that could move markets. Search for:
+
+1. **Breaking financial news** - earnings, mergers, FDA approvals, lawsuits, bankruptcies
+2. **Economic indicators** - Fed decisions, jobs data, inflation, GDP, housing
+3. **Geopolitical events** - trade wars, sanctions, conflicts, elections, regulations
+4. **Social media & retail sentiment** - trending stocks on Reddit/X/StockTwits, viral posts, meme stocks
+5. **Insider activity** - large insider buys/sells, institutional filings, hedge fund moves
+6. **Global markets** - how Asia/Europe traded, currency moves, commodity prices
+
+Search MULTIPLE times to cover different angles. Be thorough.
+
+Return your findings organized by category with sources cited."""
+
+# ── Phase 2: Synthesis agent ───────────────────────────────────────────────
+
+SYNTHESIS_SYSTEM = """You are a senior portfolio strategist at a top hedge fund. You have received two
+research briefs from your team:
+
+1. **MARKET DATA ANALYSIS** — patterns from real stock price/volume data
+2. **WEB INTELLIGENCE REPORT** — breaking news, social media, geopolitical events
+
+Your job is to SYNTHESIZE both into a single actionable research report. You must:
+
+1. **Connect the dots** — link price movements to news catalysts (e.g., "NVDA up 4% on volume 2x average —
+   likely driven by the new AI chip announcement found in web intel")
+2. **Identify disconnects** — where market price hasn't yet reacted to news (opportunity signals)
+3. **Assess market regime** — risk-on vs risk-off, sector rotation themes
+4. **Rate conviction** — high/medium/low confidence for each insight
+
+IMPORTANT: Format your response using markdown:
+### 1. Market Regime & Sentiment
+### 2. Top Market-Moving Events (with price impact)
+### 3. Pattern-News Connections
+### 4. Potential Disconnects & Opportunities
+### 5. Risk Factors to Watch
+### 6. Actionable Trading Insights
+
+Be specific. Cite data points and sources. This is for professional traders."""
+
+MARKET_IMPACT_SYNTHESIS_SYSTEM = """You are a senior portfolio strategist. You received two research briefs:
+
+1. **MARKET DATA ANALYSIS** — stock price/volume patterns
+2. **WEB INTELLIGENCE REPORT** — news, social media, geopolitical events
+
+Synthesize into a JSON object with this EXACT structure:
+
+{{"news_items": [{{"rank": 1, "title": "Event/headline", "impact_level": "high|medium|low", "impact_direction": "positive|negative|neutral", "why_it_matters": "Connect the news to actual market data - cite price moves, volume", "affected_sectors": ["sector1"], "affected_companies": ["TICKER1"], "trading_insight": "Specific actionable insight with entry/exit reasoning", "source": "source name", "data_signal": "Supporting market data pattern"}}]}}
+
+CRITICAL: Return ONLY valid JSON. Connect every news item to observable market data where possible."""
 
 
 class APIAgent:
     def __init__(self):
         self.client = Anthropic(api_key=settings.CLAUDE_API_KEY)
         self.model = settings.CLAUDE_MODEL
-        self.web_search_tool = {"type": "web_search_20250305"}
+        self.web_search_tool = {"type": "web_search_20250305", "name": "web_search", "max_uses": 5}
+        self.yahoo = YahooFinanceService()
+        self.executor = ThreadPoolExecutor(max_workers=3)
 
-    def _call_with_web_search(
-        self,
-        user_message: str,
-        system: str,
-        temperature: float = 0.7,
-        max_tokens: int = 4096,
-    ) -> str:
+    # ── Data collectors (Phase 1 — run in parallel) ─────────────────────────
+
+    def _collect_stock_data(self, query: str) -> str:
+        """Phase 1A: Gather raw stock market data from Yahoo Finance."""
+        data = {}
+
+        # Extract potential ticker symbols from query
+        symbols = self._extract_symbols(query)
+        top_symbols = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META"]
+
+        # Fetch quotes for query-specific symbols
+        for sym in symbols[:5]:
+            data[f"quote_{sym}"] = self.yahoo.get_quote(sym)
+
+        # Always include top market movers for context
+        data["market_movers"] = self.yahoo.get_market_movers()
+
+        # Fetch a few top stock quotes for broad market context
+        for sym in top_symbols[:5]:
+            if sym not in symbols:
+                data[f"quote_{sym}"] = self.yahoo.get_quote(sym)
+
+        # Now ask Claude to analyze the raw data
+        data_summary = json.dumps(data, indent=2, default=str)
+
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=1500,
+            temperature=0.3,
+            system=STOCK_PATTERN_SYSTEM,
+            messages=[{
+                "role": "user",
+                "content": f"Analyze this market data for patterns related to: {query}\n\n{data_summary}"
+            }],
+        )
+
+        return self._extract_text(response)
+
+    def _collect_web_intel(self, query: str) -> str:
+        """Phase 1B: Search the web broadly for market-moving intelligence."""
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=2000,
+            temperature=0.4,
+            system=WEB_INTEL_SYSTEM,
+            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 8}],
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Research everything happening right now that could affect: {query}\n\n"
+                    "Search for:\n"
+                    "1. Latest financial news and earnings\n"
+                    "2. Reddit WallStreetBets and X/Twitter trending stocks\n"
+                    "3. Economic data releases today\n"
+                    "4. Geopolitical events affecting markets\n"
+                    "5. Insider trading activity and institutional moves\n"
+                    "6. Global market performance (Asia, Europe)\n"
+                    "Be thorough — search multiple times for different angles."
+                )
+            }],
+        )
+
+        return self._extract_text(response)
+
+    # ── Synthesis (Phase 2 — combines both data streams) ────────────────────
+
+    def _synthesize(self, query: str, stock_data: str, web_intel: str, system: str, max_tokens: int = 3000) -> str:
+        """Phase 2: Combine stock patterns + web intelligence into final analysis."""
         response = self.client.messages.create(
             model=self.model,
             max_tokens=max_tokens,
-            temperature=temperature,
+            temperature=0.5,
             system=system,
-            tools=[self.web_search_tool],
-            messages=[{"role": "user", "content": user_message}],
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"## Query: {query}\n\n"
+                    f"## MARKET DATA ANALYSIS (from live stock data)\n{stock_data}\n\n"
+                    f"## WEB INTELLIGENCE REPORT (from internet research)\n{web_intel}\n\n"
+                    "Now synthesize both into your final analysis."
+                )
+            }],
         )
 
-        # Extract text blocks from the response
-        text_parts = []
-        for block in response.content:
-            if block.type == "text":
-                text_parts.append(block.text)
+        return self._extract_text(response)
 
-        return "\n".join(text_parts) if text_parts else ""
+    # ── Public API ──────────────────────────────────────────────────────────
 
     def analyze_market_news(self, query: str) -> str:
+        """Full parallel pipeline: stock data + web search → synthesis."""
         cache_key = f"analyze_{query.lower().strip()}"
         if cache_key in _cache and datetime.now() < _cache_ttl.get(cache_key, datetime.min):
             return _cache[cache_key]
 
         try:
-            user_message = (
-                f"Search for the latest financial news about: {query}\n"
-                "Focus on the most recent and impactful stories. "
-                "Provide a comprehensive market analysis."
-            )
+            # Phase 1: Run stock data + web intel in parallel
+            future_stock = self.executor.submit(self._collect_stock_data, query)
+            future_web = self.executor.submit(self._collect_web_intel, query)
 
-            response = self._call_with_web_search(
-                user_message=user_message,
-                system=ANALYZE_SYSTEM_PROMPT,
-                temperature=0.7,
-                max_tokens=2048,
-            )
+            stock_data = future_stock.result(timeout=60)
+            web_intel = future_web.result(timeout=90)
 
-            if not response or len(response.strip()) == 0:
+            # Phase 2: Synthesize both streams
+            analysis = self._synthesize(query, stock_data, web_intel, SYNTHESIS_SYSTEM, max_tokens=3000)
+
+            if not analysis or len(analysis.strip()) == 0:
                 return "No analysis could be generated. Please try a different query."
 
-            _cache[cache_key] = response
+            _cache[cache_key] = analysis
             _cache_ttl[cache_key] = datetime.now() + timedelta(minutes=5)
-            return response
+            return analysis
         except Exception as e:
-            return f"Error during agent analysis: {str(e)[:200]}"
+            return f"Error during parallel analysis: {str(e)[:200]}"
 
     def find_market_impact_news(self, limit: int = 10) -> dict:
+        """Full parallel pipeline for structured market impact data."""
         cache_key = f"market_impact_{limit}"
         if cache_key in _cache and datetime.now() < _cache_ttl.get(cache_key, datetime.min):
             return _cache[cache_key]
 
         try:
-            user_message = (
-                f"Search for today's top {limit} most impactful financial and stock market news. "
-                "Include news about major companies, economic indicators, Fed decisions, "
-                "earnings reports, and any breaking market-moving events. "
-                f"Return exactly {limit} items ranked by market impact."
-            )
+            query = "top market-moving financial news today"
 
-            system = MARKET_IMPACT_SYSTEM_PROMPT.replace(
-                "{limit}", str(limit)
-            )
+            # Phase 1: Parallel data collection
+            future_stock = self.executor.submit(self._collect_stock_data, query)
+            future_web = self.executor.submit(self._collect_web_intel, query)
 
-            response = self._call_with_web_search(
-                user_message=user_message,
-                system=system,
-                temperature=0.3,
-                max_tokens=2048,
+            stock_data = future_stock.result(timeout=60)
+            web_intel = future_web.result(timeout=90)
+
+            # Phase 2: Synthesize into structured JSON
+            system = MARKET_IMPACT_SYNTHESIS_SYSTEM.replace("{limit}", str(limit))
+            response = self._synthesize(
+                f"Find the top {limit} most impactful market events right now. Keep each field concise (under 150 chars).",
+                stock_data, web_intel, system, max_tokens=4096
             )
 
             if not response:
                 return {"success": False, "message": "No response from AI", "news_items": []}
 
-            # Parse JSON from response
-            cleaned = re.sub(r"```json\s*|\s*```", "", response).strip()
-
-            # Try full response first
-            try:
-                parsed = json.loads(cleaned)
-                if "news_items" in parsed:
-                    result = {"success": True, "news_items": self._validate_items(parsed["news_items"], limit)}
-                    _cache[cache_key] = result
-                    _cache_ttl[cache_key] = datetime.now() + timedelta(minutes=2)
-                    return result
-            except json.JSONDecodeError:
-                pass
-
-            # Try to find JSON object in response
-            json_match = re.search(r"\{[^{}]*\"news_items\"[^{}]*\[[^\]]*\][^{}]*\}", cleaned, re.DOTALL)
-            if json_match:
-                try:
-                    parsed = json.loads(json_match.group(0))
-                    items = self._validate_items(parsed.get("news_items", []), limit)
-                    if items:
-                        result = {"success": True, "news_items": items}
-                        _cache[cache_key] = result
-                        _cache_ttl[cache_key] = datetime.now() + timedelta(minutes=2)
-                        return result
-                except json.JSONDecodeError:
-                    pass
-
-            return {"success": False, "message": "Unable to parse response", "news_items": []}
+            return self._parse_impact_json(response, limit)
         except Exception as e:
             return {"success": False, "message": f"Error: {str(e)[:200]}", "news_items": []}
+
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
+    def _extract_text(self, response) -> str:
+        """Extract text blocks from an Anthropic API response."""
+        parts = []
+        for block in response.content:
+            if block.type == "text":
+                parts.append(block.text)
+        return "\n".join(parts) if parts else ""
+
+    def _extract_symbols(self, query: str) -> list:
+        """Extract stock ticker symbols from a query string."""
+        # Match uppercase 1-5 letter words that look like tickers
+        tickers = re.findall(r'\b([A-Z]{1,5})\b', query)
+        # Also check for common company names
+        name_map = {
+            "apple": "AAPL", "google": "GOOGL", "microsoft": "MSFT",
+            "amazon": "AMZN", "tesla": "TSLA", "nvidia": "NVDA",
+            "meta": "META", "netflix": "NFLX", "amd": "AMD",
+        }
+        for name, sym in name_map.items():
+            if name in query.lower():
+                tickers.append(sym)
+        # Deduplicate while preserving order
+        seen = set()
+        return [t for t in tickers if not (t in seen or seen.add(t))]
+
+    def _parse_impact_json(self, response: str, limit: int) -> dict:
+        """Parse structured JSON from the synthesis response."""
+        cleaned = re.sub(r"```json\s*|\s*```", "", response).strip()
+
+        # Try full response first
+        try:
+            parsed = json.loads(cleaned)
+            if "news_items" in parsed:
+                return self._cache_impact(parsed["news_items"], limit)
+        except json.JSONDecodeError:
+            pass
+
+        # Find the outermost { ... } that contains "news_items"
+        start = cleaned.find('{"news_items"')
+        if start == -1:
+            start = cleaned.find('"news_items"')
+            if start != -1:
+                # Walk back to find opening brace
+                start = cleaned.rfind('{', 0, start)
+
+        if start != -1:
+            # Find matching closing brace by counting braces
+            depth = 0
+            for i in range(start, len(cleaned)):
+                if cleaned[i] == '{':
+                    depth += 1
+                elif cleaned[i] == '}':
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            parsed = json.loads(cleaned[start:i + 1])
+                            if "news_items" in parsed:
+                                return self._cache_impact(parsed["news_items"], limit)
+                        except json.JSONDecodeError:
+                            pass
+                        break
+
+        return {"success": False, "message": "Unable to parse response", "news_items": []}
+
+    def _cache_impact(self, news_items: list, limit: int) -> dict:
+        result = {"success": True, "news_items": self._validate_items(news_items, limit)}
+        _cache[f"market_impact_{limit}"] = result
+        _cache_ttl[f"market_impact_{limit}"] = datetime.now() + timedelta(minutes=2)
+        return result
 
     def _validate_items(self, items: list, limit: int) -> list:
         validated = []
@@ -168,6 +325,7 @@ class APIAgent:
                     "affected_companies": item.get("affected_companies", []) if isinstance(item.get("affected_companies"), list) else [],
                     "trading_insight": str(item.get("trading_insight", ""))[:500],
                     "source": str(item.get("source", "Unknown"))[:100],
+                    "data_signal": str(item.get("data_signal", ""))[:300],
                 })
         return validated
 
