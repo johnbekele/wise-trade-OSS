@@ -1,0 +1,33 @@
+# Lightweight local dev — no local MongoDB (uses Atlas + Turso cloud)
+# Run: docker compose -f docker-compose.local.yml up --build
+
+services:
+  backend:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: wise-trade-backend
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    volumes:
+      - ./apps/api/app:/app/app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+
+  frontend:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile.dev
+    container_name: wise-trade-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/web/src:/app/src
+      - ./apps/web/index.html:/app/index.html
+    environment:
+      VITE_API_BASE_URL: http://localhost:8001/api
+    depends_on:
+      - backend

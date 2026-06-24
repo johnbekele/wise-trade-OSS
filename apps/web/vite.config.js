@@ -15,7 +15,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || (isDocker ? 'http://backend:8001' : 'http://localhost:8000'),
+        target: process.env.VITE_API_URL || (isDocker ? 'http://backend:8001' : 'http://localhost:8001'),
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '/api'),
       },

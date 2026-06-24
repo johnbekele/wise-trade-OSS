@@ -5,6 +5,7 @@ from app.routers import test
 from app.core.database import init_database, close_db_connection
 from app.core.startup_checks import run_startup_checks
 from app.core.config import settings
+from app.core.turso_db import init_tables as init_turso
 from contextlib import asynccontextmanager
 
 
@@ -29,8 +30,15 @@ async def lifespan(app: FastAPI):
     
     # Initialize database
     await init_database()
-    print("Beanie initialized successfully 🍃")
-    
+    print("Beanie initialized successfully")
+
+    # Initialize Turso tables (cache + search history)
+    try:
+        init_turso()
+        print("Turso tables initialized successfully")
+    except Exception as e:
+        print(f"Turso init warning (non-fatal): {e}")
+
     yield
     
     print("Closing lifespan...")
@@ -51,7 +59,12 @@ app.add_middleware(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000","https://wise-trade-client.vercel.app"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://wise-trade-client.vercel.app",
+        "https://wise-trade-oss.vercel.app",
+    ],
     allow_credentials=True,  # Required for cookies
     allow_methods=["*"],
     allow_headers=["*"],

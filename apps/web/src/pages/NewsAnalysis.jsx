@@ -1,12 +1,12 @@
-import { useState } from 'react';
-import { Newspaper, TrendingUp, RefreshCw, Search, AlertCircle, ArrowUp, ArrowDown, Minus, Building2, Lightbulb, CheckCircle, Target, Zap, Lock, LogIn, ChevronRight } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Newspaper, TrendingUp, RefreshCw, Search, AlertCircle, ArrowUp, ArrowDown, Minus, Building2, Lightbulb, CheckCircle, Target, Zap, Lock, LogIn, ChevronRight, Clock, History } from 'lucide-react';
 import { useMarketImpactNews, useNewsAnalysis } from '../hooks/useNews';
+import { useSearchHistory } from '../hooks/useSearchHistory';
 import { getLogoProps } from '../utils/helpers';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 
 // Helper function to parse and structure markdown-like analysis text
-// (Kept the same logic but ensured it handles various formats)
 function parseAnalysisText(text) {
   if (!text) return { sections: [], rawText: '' };
 
@@ -18,10 +18,8 @@ function parseAnalysisText(text) {
 
   lines.forEach((line, index) => {
     const trimmedLine = line.trim();
-    
-    // Skip empty lines
+
     if (!trimmedLine) {
-      // If we have accumulated paragraph text, add it to current item
       if (currentParagraph.length > 0 && currentItems.length > 0) {
         const lastItem = currentItems[currentItems.length - 1];
         const paragraphText = currentParagraph.join(' ').trim();
@@ -35,13 +33,12 @@ function parseAnalysisText(text) {
       return;
     }
 
-    // Main section headers
     if (trimmedLine.match(/^#{1,4}\s+\d+\./) || trimmedLine.match(/^\d+\.\s+[A-Z][^a-z]{10,}/) || trimmedLine.match(/^#{1,4}\s+[A-Z]/)) {
       if (currentSection) {
         currentSection.items = currentItems;
         sections.push(currentSection);
       }
-      
+
       currentSection = {
         title: trimmedLine.replace(/^#{1,4}\s+/, '').replace(/^\d+\.\s+/, '').trim(),
         items: [],
@@ -50,7 +47,6 @@ function parseAnalysisText(text) {
       currentItems = [];
       currentParagraph = [];
     }
-    // Numbered list items
     else if (trimmedLine.match(/^\d+\.\s+\*\*/)) {
       if (currentParagraph.length > 0 && currentItems.length > 0) {
         const lastItem = currentItems[currentItems.length - 1];
@@ -68,7 +64,6 @@ function parseAnalysisText(text) {
         });
       }
     }
-    // Bullet points
     else if (trimmedLine.match(/^\s*[\*\-•]\s+/) || trimmedLine.match(/^\s{2,}[\*\-•]/)) {
       const match = trimmedLine.match(/^\s*[\*\-•]\s+\*\*(.+?)\*\*:?\s*(.*)/) || trimmedLine.match(/^\s*[\*\-•]\s+(.+)/);
       if (match) {
@@ -83,7 +78,6 @@ function parseAnalysisText(text) {
       }
       currentParagraph = [];
     }
-    // Regular paragraph
     else if (trimmedLine && currentSection) {
       currentParagraph.push(trimmedLine);
     }
@@ -102,29 +96,125 @@ function parseAnalysisText(text) {
   return { sections, rawText: text };
 }
 
+function StreamingTextRenderer({ text }) {
+  if (!text) return null;
+  return (
+    <div className="p-6 space-y-2 font-mono text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
+      {text}
+      <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-0.5" />
+    </div>
+  );
+}
+
+function AnalysisRenderer({ text }) {
+  if (!text) return null;
+  return (
+    <div className="p-6 space-y-6">
+      {text.split('\n').map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={idx} className="h-2"></div>;
+
+        if (trimmed.match(/^#{1,4}\s/) || trimmed.match(/^\d+\.\s+[A-Z]/)) {
+          const headerText = trimmed.replace(/^#{1,4}\s+/, '').replace(/^\d+\.\s+/, '');
+          return (
+            <h3 key={idx} className="text-lg font-bold text-foreground flex items-center gap-2 mt-4 mb-2">
+              {headerText}
+            </h3>
+          );
+        }
+
+        if (trimmed.match(/^\d+\.\s+\*\*/)) {
+          const match = trimmed.match(/^\d+\.\s+\*\*(.+?)\*\*(.*)/) || trimmed.match(/^\d+\.\s+(.+)/);
+          const title = match[1]?.trim();
+          const desc = match[2]?.trim();
+
+          return (
+            <div key={idx} className="bg-card border p-4 rounded-lg shadow-sm ml-4 relative">
+              <div className="absolute -left-3 top-4 w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold border-2 border-background">
+                {trimmed.match(/^(\d+)\./)[1]}
+              </div>
+              <h4 className="font-semibold text-foreground mb-1">{title}</h4>
+              <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
+            </div>
+          );
+        }
+
+        if (trimmed.match(/^\s*[\*\-•]\s+/)) {
+          const match = trimmed.match(/^\s*[\*\-•]\s+\*\*(.+?)\*\*:?\s*(.*)/) || trimmed.match(/^\s*[\*\-•]\s+(.+)/);
+          const label = match[1]?.replace(':', '').trim();
+          const bulletText = match[2]?.trim() || match[0]?.replace(/^\s*[\*\-•]\s+/, '').trim();
+
+          return (
+            <div key={idx} className="flex gap-3 ml-6 py-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 flex-shrink-0" />
+              <p className="text-sm text-muted-foreground">
+                {label && <span className="font-medium text-foreground">{label}: </span>}
+                {bulletText}
+              </p>
+            </div>
+          );
+        }
+
+        return (
+          <p key={idx} className="text-muted-foreground leading-relaxed">
+            {trimmed.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').split(/<strong>|<\/strong>/).map((part, i) =>
+              i % 2 === 0 ? part : <strong key={i} className="font-medium text-foreground">{part}</strong>
+            )}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function NewsAnalysis() {
   const [query, setQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
   const { isAuthenticated } = useAuth();
 
   const {
     data: marketImpactData,
     isLoading: loadingMarket,
-    refetch: refetchMarketImpact
+    forceRefresh: forceRefreshMarket,
   } = useMarketImpactNews(10, { enabled: isAuthenticated });
 
   const {
     analyze,
+    streamingText,
+    phase,
     data: analysisData,
     isLoading: loadingAnalysis,
+    isError,
+    error: analysisError,
     reset: resetAnalysis
   } = useNewsAnalysis();
 
+  const {
+    data: historyData,
+    refetch: refetchHistory,
+  } = useSearchHistory(10, { enabled: isAuthenticated });
+
   const marketImpactNews = marketImpactData?.news_items || [];
+  const searchHistory = historyData?.history || [];
 
   const handleAnalyze = (e) => {
     e.preventDefault();
     if (!query.trim()) return;
     analyze(query);
+  };
+
+  const handleRefreshMarket = async () => {
+    setRefreshing(true);
+    try {
+      await forceRefreshMarket();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleHistoryClick = (historyQuery) => {
+    setQuery(historyQuery);
+    analyze(historyQuery);
   };
 
   const getImpactBadgeStyles = (level) => {
@@ -145,7 +235,18 @@ export default function NewsAnalysis() {
     }
   };
 
-  const parsedAnalysis = analysisData ? parseAnalysisText(analysisData.analysis) : null;
+  const getPhaseMessage = () => {
+    switch (phase) {
+      case 'collecting': return 'Gathering market data and web intelligence...';
+      case 'synthesizing': return 'Synthesizing insights...';
+      case 'cached': return 'Loading cached results...';
+      default: return '';
+    }
+  };
+
+  // Show streaming text during synthesis, final result when done
+  const showStreaming = phase === 'synthesizing' || phase === 'cached';
+  const showFinalResult = phase === 'done' && analysisData;
 
   return (
     <div className="space-y-8">
@@ -169,7 +270,7 @@ export default function NewsAnalysis() {
               <Link to="/login" className="btn btn-primary px-8">Sign In</Link>
               <Link to="/signup" className="btn btn-outline px-8">Create Account</Link>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16 w-full max-w-4xl text-left">
                <div className="space-y-2">
                   <div className="bg-secondary w-10 h-10 rounded flex items-center justify-center">
@@ -202,15 +303,16 @@ export default function NewsAnalysis() {
           <div className="card-header flex flex-row items-center justify-between">
              <div>
                 <h3 className="card-title">Market Impact Monitor</h3>
-                <p className="card-description">High-impact news events detected by AI</p>
+                <p className="card-description">High-impact news events detected by AI (cached daily)</p>
              </div>
-             <button 
-               onClick={() => refetchMarketImpact()} 
-               disabled={loadingMarket}
+             <button
+               onClick={handleRefreshMarket}
+               disabled={loadingMarket || refreshing}
                className="btn btn-ghost btn-sm"
+               title="Force refresh — re-runs AI analysis"
              >
-               <RefreshCw className={`w-4 h-4 mr-2 ${loadingMarket ? 'animate-spin' : ''}`} />
-               Refresh
+               <RefreshCw className={`w-4 h-4 mr-2 ${(loadingMarket || refreshing) ? 'animate-spin' : ''}`} />
+               {refreshing ? 'Refreshing...' : 'Refresh'}
              </button>
           </div>
           <div className="card-content">
@@ -226,7 +328,6 @@ export default function NewsAnalysis() {
                          <div className="space-y-1">
                             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                                <span className="px-2 py-0.5 bg-secondary rounded text-foreground">{item.source}</span>
-                               <span>•</span>
                                <span>Rank #{item.rank}</span>
                             </div>
                             <h4 className="font-bold text-lg leading-tight group-hover:text-primary transition-colors line-clamp-2">
@@ -238,13 +339,13 @@ export default function NewsAnalysis() {
                             {item.impact_level}
                          </div>
                       </div>
-                      
+
                       <div className="space-y-4">
                          <div className="text-sm text-muted-foreground line-clamp-3">
                             <span className="font-semibold text-foreground">Impact: </span>
                             {item.why_it_matters}
                          </div>
-                         
+
                          {(item.affected_companies?.length > 0 || item.affected_sectors?.length > 0) && (
                             <div className="flex flex-wrap gap-2">
                                {item.affected_companies?.slice(0, 3).map((company, i) => (
@@ -265,7 +366,7 @@ export default function NewsAnalysis() {
                </div>
             ) : (
               <div className="text-center py-12 text-muted-foreground">
-                No high-impact news detected at this moment.
+                No high-impact news detected at this moment. Click Refresh to analyze.
               </div>
             )}
           </div>
@@ -281,8 +382,8 @@ export default function NewsAnalysis() {
              <form onSubmit={handleAnalyze} className="flex gap-3">
                 <div className="relative flex-1">
                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                   <input 
-                     type="text" 
+                   <input
+                     type="text"
                      value={query}
                      onChange={(e) => setQuery(e.target.value)}
                      placeholder="e.g. Impact of interest rate hikes on tech stocks..."
@@ -290,8 +391,8 @@ export default function NewsAnalysis() {
                      disabled={loadingAnalysis}
                    />
                 </div>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={loadingAnalysis || !query.trim()}
                   className="btn btn-primary px-6"
                 >
@@ -304,7 +405,48 @@ export default function NewsAnalysis() {
                 </button>
              </form>
 
-             {analysisData && (
+             {/* Phase indicator */}
+             {loadingAnalysis && phase && phase !== 'done' && (
+               <div className="flex items-center gap-3 p-4 rounded-lg border bg-muted/20 animate-in fade-in duration-300">
+                 <div className="relative">
+                   <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                 </div>
+                 <div>
+                   <p className="text-sm font-medium text-foreground">{getPhaseMessage()}</p>
+                   <p className="text-xs text-muted-foreground">
+                     {phase === 'collecting' && 'Searching financial news, analyzing stock data, and scanning social media...'}
+                     {phase === 'synthesizing' && 'Claude is connecting the dots between market data and news...'}
+                   </p>
+                 </div>
+               </div>
+             )}
+
+             {/* Error state */}
+             {isError && (
+               <div className="flex items-center gap-3 p-4 rounded-lg border border-destructive/20 bg-destructive/5">
+                 <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0" />
+                 <p className="text-sm text-destructive">{analysisError || 'Analysis failed. Please try again.'}</p>
+               </div>
+             )}
+
+             {/* Streaming text during synthesis */}
+             {showStreaming && streamingText && (
+               <div className="rounded-lg border bg-muted/10 overflow-hidden animate-in fade-in duration-300">
+                  <div className="flex items-center justify-between p-4 border-b bg-muted/20">
+                     <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-primary/10 rounded">
+                          <TrendingUp className="w-4 h-4 text-primary" />
+                        </div>
+                        <span className="font-medium">Streaming Analysis</span>
+                        <span className="text-xs text-muted-foreground animate-pulse">Live</span>
+                     </div>
+                  </div>
+                  <StreamingTextRenderer text={streamingText} />
+               </div>
+             )}
+
+             {/* Final parsed result */}
+             {showFinalResult && (
                <div className="rounded-lg border bg-muted/10 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div className="flex items-center justify-between p-4 border-b bg-muted/20">
                      <div className="flex items-center gap-2">
@@ -312,75 +454,53 @@ export default function NewsAnalysis() {
                           <TrendingUp className="w-4 h-4 text-primary" />
                         </div>
                         <span className="font-medium">Analysis Results</span>
+                        <CheckCircle className="w-4 h-4 text-green-600" />
                      </div>
-                     <button onClick={resetAnalysis} className="text-xs text-muted-foreground hover:text-foreground">
+                     <button onClick={() => { resetAnalysis(); refetchHistory(); }} className="text-xs text-muted-foreground hover:text-foreground">
                         Clear Results
                      </button>
                   </div>
-                  
-                  <div className="p-6 space-y-6">
-                     {parsedAnalysis.rawText.split('\n').map((line, idx) => {
-                        const trimmed = line.trim();
-                        if (!trimmed) return <div key={idx} className="h-2"></div>;
-
-                        // Headers
-                        if (trimmed.match(/^#{1,4}\s/) || trimmed.match(/^\d+\.\s+[A-Z]/)) {
-                           const text = trimmed.replace(/^#{1,4}\s+/, '').replace(/^\d+\.\s+/, '');
-                           return (
-                              <h3 key={idx} className="text-lg font-bold text-foreground flex items-center gap-2 mt-4 mb-2">
-                                 {text}
-                              </h3>
-                           );
-                        }
-
-                        // Numbered items with bold titles
-                        if (trimmed.match(/^\d+\.\s+\*\*/)) {
-                           const match = trimmed.match(/^\d+\.\s+\*\*(.+?)\*\*(.*)/) || trimmed.match(/^\d+\.\s+(.+)/);
-                           const title = match[1]?.trim();
-                           const desc = match[2]?.trim();
-                           
-                           return (
-                              <div key={idx} className="bg-card border p-4 rounded-lg shadow-sm ml-4 relative">
-                                 <div className="absolute -left-3 top-4 w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xs font-bold border-2 border-background">
-                                    {trimmed.match(/^(\d+)\./)[1]}
-                                 </div>
-                                 <h4 className="font-semibold text-foreground mb-1">{title}</h4>
-                                 <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
-                              </div>
-                           );
-                        }
-
-                        // Bullet points
-                        if (trimmed.match(/^\s*[\*\-•]\s+/)) {
-                           const match = trimmed.match(/^\s*[\*\-•]\s+\*\*(.+?)\*\*:?\s*(.*)/) || trimmed.match(/^\s*[\*\-•]\s+(.+)/);
-                           const label = match[1]?.replace(':', '').trim();
-                           const text = match[2]?.trim() || match[0]?.replace(/^\s*[\*\-•]\s+/, '').trim();
-                           
-                           return (
-                              <div key={idx} className="flex gap-3 ml-6 py-1">
-                                 <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 flex-shrink-0" />
-                                 <p className="text-sm text-muted-foreground">
-                                    {label && <span className="font-medium text-foreground">{label}: </span>}
-                                    {text}
-                                 </p>
-                              </div>
-                           );
-                        }
-
-                        // Standard Text
-                        return (
-                           <p key={idx} className="text-muted-foreground leading-relaxed">
-                              {trimmed.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').split(/<strong>|<\/strong>/).map((part, i) => 
-                                 i % 2 === 0 ? part : <strong key={i} className="font-medium text-foreground">{part}</strong>
-                              )}
-                           </p>
-                        );
-                     })}
-                  </div>
+                  <AnalysisRenderer text={analysisData.analysis} />
                </div>
              )}
           </div>
         </div>
+
+        {/* Search History Section */}
+        {searchHistory.length > 0 && (
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title flex items-center gap-2">
+                <History className="w-5 h-5" />
+                Recent Searches
+              </h3>
+              <p className="card-description">Your recent deep dive analyses</p>
+            </div>
+            <div className="card-content">
+              <div className="space-y-2">
+                {searchHistory.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleHistoryClick(item.query)}
+                    className="w-full flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors text-left group"
+                    disabled={loadingAnalysis}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-sm font-medium truncate">{item.query}</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(item.created_at).toLocaleDateString()}
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
         </>
       )}
     </div>

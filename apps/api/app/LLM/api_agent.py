@@ -1,15 +1,18 @@
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Generator
 import json
 import re
 from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 
 from anthropic import Anthropic
 from app.core.config import settings
 from app.services.yahoo_finance_service import YahooFinanceService
+from app.core import turso_db
 
-_cache = {}
-_cache_ttl = {}
+# L1 in-memory cache (process-lifetime, in front of Turso)
+_mem_cache: Dict[str, Any] = {}
+_mem_cache_ts: Dict[str, datetime] = {}
+_MEM_TTL = timedelta(minutes=10)
 
 # ── Phase 1A: Stock data collector ──────────────────────────────────────────
 
@@ -93,7 +96,7 @@ class APIAgent:
         self.model = settings.CLAUDE_MODEL
         self.web_search_tool = {"type": "web_search_20250305", "name": "web_search", "max_uses": 5}
         self.yahoo = YahooFinanceService()
-        self.executor = ThreadPoolExecutor(max_workers=3)
+        self.executor = ThreadPoolExecutor(max_workers=2)
 
     # ── Data collectors (Phase 1 — run in parallel) ─────────────────────────
 
@@ -101,23 +104,18 @@ class APIAgent:
         """Phase 1A: Gather raw stock market data from Yahoo Finance."""
         data = {}
 
-        # Extract potential ticker symbols from query
         symbols = self._extract_symbols(query)
         top_symbols = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META"]
 
-        # Fetch quotes for query-specific symbols
         for sym in symbols[:5]:
             data[f"quote_{sym}"] = self.yahoo.get_quote(sym)
 
-        # Always include top market movers for context
         data["market_movers"] = self.yahoo.get_market_movers()
 
-        # Fetch a few top stock quotes for broad market context
         for sym in top_symbols[:5]:
             if sym not in symbols:
                 data[f"quote_{sym}"] = self.yahoo.get_quote(sym)
 
-        # Now ask Claude to analyze the raw data
         data_summary = json.dumps(data, indent=2, default=str)
 
         response = self.client.messages.create(
@@ -159,7 +157,7 @@ class APIAgent:
 
         return self._extract_text(response)
 
-    # ── Synthesis (Phase 2 — combines both data streams) ────────────────────
+    # ── Synthesis (Phase 2) ────────────────────────────────────────────────
 
     def _synthesize(self, query: str, stock_data: str, web_intel: str, system: str, max_tokens: int = 3000) -> str:
         """Phase 2: Combine stock patterns + web intelligence into final analysis."""
@@ -184,48 +182,146 @@ class APIAgent:
     # ── Public API ──────────────────────────────────────────────────────────
 
     def analyze_market_news(self, query: str) -> str:
-        """Full parallel pipeline: stock data + web search → synthesis."""
+        """Full parallel pipeline: stock data + web search -> synthesis."""
         cache_key = f"analyze_{query.lower().strip()}"
-        if cache_key in _cache and datetime.now() < _cache_ttl.get(cache_key, datetime.min):
-            return _cache[cache_key]
+
+        # L1: in-memory
+        if cache_key in _mem_cache and datetime.now() < _mem_cache_ts.get(cache_key, datetime.min):
+            return _mem_cache[cache_key]
+
+        # L2: Turso persistent cache
+        try:
+            cached = turso_db.get_cache(cache_key)
+            if cached is not None:
+                _mem_cache[cache_key] = cached
+                _mem_cache_ts[cache_key] = datetime.now() + _MEM_TTL
+                return cached
+        except Exception:
+            pass
 
         try:
-            # Phase 1: Run stock data + web intel in parallel
             future_stock = self.executor.submit(self._collect_stock_data, query)
             future_web = self.executor.submit(self._collect_web_intel, query)
 
             stock_data = future_stock.result(timeout=60)
             web_intel = future_web.result(timeout=90)
 
-            # Phase 2: Synthesize both streams
             analysis = self._synthesize(query, stock_data, web_intel, SYNTHESIS_SYSTEM, max_tokens=3000)
 
             if not analysis or len(analysis.strip()) == 0:
                 return "No analysis could be generated. Please try a different query."
 
-            _cache[cache_key] = analysis
-            _cache_ttl[cache_key] = datetime.now() + timedelta(minutes=5)
+            # Store in both caches
+            _mem_cache[cache_key] = analysis
+            _mem_cache_ts[cache_key] = datetime.now() + _MEM_TTL
+            try:
+                turso_db.set_cache(cache_key, analysis, query, "deep_dive", ttl_hours=24)
+            except Exception:
+                pass
+
             return analysis
         except Exception as e:
             return f"Error during parallel analysis: {str(e)[:200]}"
 
-    def find_market_impact_news(self, limit: int = 10) -> dict:
+    def analyze_market_news_stream(self, query: str) -> Generator[Dict[str, Any], None, None]:
+        """Streaming version: yields SSE events as analysis progresses."""
+        cache_key = f"analyze_{query.lower().strip()}"
+
+        # Check caches first — if cached, stream the full result immediately
+        cached = None
+        if cache_key in _mem_cache and datetime.now() < _mem_cache_ts.get(cache_key, datetime.min):
+            cached = _mem_cache[cache_key]
+        else:
+            try:
+                cached = turso_db.get_cache(cache_key)
+            except Exception:
+                pass
+
+        if cached is not None:
+            yield {"event": "status", "data": {"phase": "cached"}}
+            yield {"event": "delta", "data": {"text": cached}}
+            yield {"event": "done", "data": {"full_text": cached}}
+            return
+
+        # Phase 1: Parallel data collection
+        yield {"event": "status", "data": {"phase": "collecting", "message": "Gathering market data and web intelligence..."}}
+
+        try:
+            future_stock = self.executor.submit(self._collect_stock_data, query)
+            future_web = self.executor.submit(self._collect_web_intel, query)
+
+            stock_data = future_stock.result(timeout=60)
+            web_intel = future_web.result(timeout=90)
+        except Exception as e:
+            yield {"event": "error", "data": {"message": f"Data collection failed: {str(e)[:200]}"}}
+            return
+
+        # Phase 2: Streaming synthesis
+        yield {"event": "status", "data": {"phase": "synthesizing", "message": "Synthesizing insights..."}}
+
+        full_text = ""
+        try:
+            with self.client.messages.stream(
+                model=self.model,
+                max_tokens=3000,
+                temperature=0.5,
+                system=SYNTHESIS_SYSTEM,
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"## Query: {query}\n\n"
+                        f"## MARKET DATA ANALYSIS (from live stock data)\n{stock_data}\n\n"
+                        f"## WEB INTELLIGENCE REPORT (from internet research)\n{web_intel}\n\n"
+                        "Now synthesize both into your final analysis."
+                    )
+                }],
+            ) as stream:
+                for text in stream.text_stream:
+                    full_text += text
+                    yield {"event": "delta", "data": {"text": text}}
+        except Exception as e:
+            yield {"event": "error", "data": {"message": f"Synthesis failed: {str(e)[:200]}"}}
+            return
+
+        yield {"event": "done", "data": {"full_text": full_text}}
+
+        # Cache the result
+        _mem_cache[cache_key] = full_text
+        _mem_cache_ts[cache_key] = datetime.now() + _MEM_TTL
+        try:
+            turso_db.set_cache(cache_key, full_text, query, "deep_dive", ttl_hours=24)
+        except Exception:
+            pass
+
+    def find_market_impact_news(self, limit: int = 10, force_refresh: bool = False) -> dict:
         """Full parallel pipeline for structured market impact data."""
         cache_key = f"market_impact_{limit}"
-        if cache_key in _cache and datetime.now() < _cache_ttl.get(cache_key, datetime.min):
-            return _cache[cache_key]
+
+        if not force_refresh:
+            # L1: in-memory
+            if cache_key in _mem_cache and datetime.now() < _mem_cache_ts.get(cache_key, datetime.min):
+                return _mem_cache[cache_key]
+
+            # L2: Turso persistent cache (24h TTL)
+            try:
+                cached = turso_db.get_cache(cache_key)
+                if cached is not None:
+                    result = json.loads(cached)
+                    _mem_cache[cache_key] = result
+                    _mem_cache_ts[cache_key] = datetime.now() + _MEM_TTL
+                    return result
+            except Exception:
+                pass
 
         try:
             query = "top market-moving financial news today"
 
-            # Phase 1: Parallel data collection
             future_stock = self.executor.submit(self._collect_stock_data, query)
             future_web = self.executor.submit(self._collect_web_intel, query)
 
             stock_data = future_stock.result(timeout=60)
             web_intel = future_web.result(timeout=90)
 
-            # Phase 2: Synthesize into structured JSON
             system = MARKET_IMPACT_SYNTHESIS_SYSTEM.replace("{limit}", str(limit))
             response = self._synthesize(
                 f"Find the top {limit} most impactful market events right now. Keep each field concise (under 150 chars).",
@@ -235,7 +331,17 @@ class APIAgent:
             if not response:
                 return {"success": False, "message": "No response from AI", "news_items": []}
 
-            return self._parse_impact_json(response, limit)
+            result = self._parse_impact_json(response, limit)
+
+            # Store in both caches
+            _mem_cache[cache_key] = result
+            _mem_cache_ts[cache_key] = datetime.now() + _MEM_TTL
+            try:
+                turso_db.set_cache(cache_key, result, "market_impact", "market_impact", ttl_hours=24)
+            except Exception:
+                pass
+
+            return result
         except Exception as e:
             return {"success": False, "message": f"Error: {str(e)[:200]}", "news_items": []}
 
@@ -251,9 +357,7 @@ class APIAgent:
 
     def _extract_symbols(self, query: str) -> list:
         """Extract stock ticker symbols from a query string."""
-        # Match uppercase 1-5 letter words that look like tickers
         tickers = re.findall(r'\b([A-Z]{1,5})\b', query)
-        # Also check for common company names
         name_map = {
             "apple": "AAPL", "google": "GOOGL", "microsoft": "MSFT",
             "amazon": "AMZN", "tesla": "TSLA", "nvidia": "NVDA",
@@ -262,7 +366,6 @@ class APIAgent:
         for name, sym in name_map.items():
             if name in query.lower():
                 tickers.append(sym)
-        # Deduplicate while preserving order
         seen = set()
         return [t for t in tickers if not (t in seen or seen.add(t))]
 
@@ -270,24 +373,20 @@ class APIAgent:
         """Parse structured JSON from the synthesis response."""
         cleaned = re.sub(r"```json\s*|\s*```", "", response).strip()
 
-        # Try full response first
         try:
             parsed = json.loads(cleaned)
             if "news_items" in parsed:
-                return self._cache_impact(parsed["news_items"], limit)
+                return {"success": True, "news_items": self._validate_items(parsed["news_items"], limit)}
         except json.JSONDecodeError:
             pass
 
-        # Find the outermost { ... } that contains "news_items"
         start = cleaned.find('{"news_items"')
         if start == -1:
             start = cleaned.find('"news_items"')
             if start != -1:
-                # Walk back to find opening brace
                 start = cleaned.rfind('{', 0, start)
 
         if start != -1:
-            # Find matching closing brace by counting braces
             depth = 0
             for i in range(start, len(cleaned)):
                 if cleaned[i] == '{':
@@ -298,18 +397,12 @@ class APIAgent:
                         try:
                             parsed = json.loads(cleaned[start:i + 1])
                             if "news_items" in parsed:
-                                return self._cache_impact(parsed["news_items"], limit)
+                                return {"success": True, "news_items": self._validate_items(parsed["news_items"], limit)}
                         except json.JSONDecodeError:
                             pass
                         break
 
         return {"success": False, "message": "Unable to parse response", "news_items": []}
-
-    def _cache_impact(self, news_items: list, limit: int) -> dict:
-        result = {"success": True, "news_items": self._validate_items(news_items, limit)}
-        _cache[f"market_impact_{limit}"] = result
-        _cache_ttl[f"market_impact_{limit}"] = datetime.now() + timedelta(minutes=2)
-        return result
 
     def _validate_items(self, items: list, limit: int) -> list:
         validated = []

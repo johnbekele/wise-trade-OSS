@@ -44,8 +44,8 @@ async def init_database():
                     serverSelectionTimeoutMS=30000,  # 30 seconds for cloud
                     connectTimeoutMS=30000,  # 30 seconds for cloud
                     socketTimeoutMS=30000,  # 30 seconds socket timeout
-                    maxPoolSize=50,  # Connection pool size
-                    minPoolSize=10,  # Minimum connections
+                    maxPoolSize=10,  # Connection pool size
+                    minPoolSize=1,  # Minimum connections
                     maxIdleTimeMS=45000,  # Close idle connections after 45s
                     retryWrites=True,  # Retry writes on network errors
                     retryReads=True,  # Retry reads on network errors
@@ -66,8 +66,8 @@ async def init_database():
                     serverSelectionTimeoutMS=30000,  # 30 seconds for cloud
                     connectTimeoutMS=30000,  # 30 seconds for cloud
                     socketTimeoutMS=30000,  # 30 seconds socket timeout
-                    maxPoolSize=50,  # Connection pool size
-                    minPoolSize=10,  # Minimum connections
+                    maxPoolSize=10,  # Connection pool size
+                    minPoolSize=1,  # Minimum connections
                     maxIdleTimeMS=45000,  # Close idle connections after 45s
                     retryWrites=True,  # Retry writes on network errors
                     retryReads=True,  # Retry reads on network errors

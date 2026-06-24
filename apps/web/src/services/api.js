@@ -57,9 +57,18 @@ export const newsAPI = {
     });
     return response.data;
   },
-  
-  getMarketImpact: async (limit = 10) => {
+
+  getMarketImpact: async (limit = 10, forceRefresh = false) => {
+    const params = { limit };
+    if (forceRefresh) params.force_refresh = true;
     const response = await axios.get(`${API_BASE_URL}/ai/market-impact`, {
+      params
+    });
+    return response.data;
+  },
+
+  getSearchHistory: async (limit = 20) => {
+    const response = await axios.get(`${API_BASE_URL}/ai/search-history`, {
       params: { limit }
     });
     return response.data;

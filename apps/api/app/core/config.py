@@ -45,10 +45,10 @@ class Config:
     CLAUDE_API_KEY=os.getenv("CLAUDE_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
     CLAUDE_MODEL=os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
     
-    # Legacy Gemini support (deprecated)
-    GEMINI_API_KEY=os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-    GEMINI_MODEL=os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
-    
+    # Turso (libsql) configuration
+    TURSO_DATABASE_URL=os.getenv("TURSO_DATABASE_URL")
+    TURSO_AUTH_TOKEN=os.getenv("TURSO_AUTH_TOKEN")
+
     # Google OAuth2 configuration
     GOOGLE_CLIENT_ID=os.getenv("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET=os.getenv("GOOGLE_CLIENT_SECRET")
