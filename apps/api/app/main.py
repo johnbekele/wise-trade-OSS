@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
     
     print("Closing lifespan...")
     await close_db_connection()
-    print("MongoDB connection closed successfully 🍃")
+    print("MongoDB connection closed successfully")
 
 app = FastAPI(lifespan=lifespan)
 
@@ -64,6 +64,7 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "https://wise-trade-client.vercel.app",
         "https://wise-trade-oss.vercel.app",
+        "https://wise-trade-oss-web.vercel.app",
     ],
     allow_credentials=True,  # Required for cookies
     allow_methods=["*"],
