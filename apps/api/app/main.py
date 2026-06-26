@@ -48,12 +48,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # Add Session middleware (required for Google OAuth)
-# Session middleware stores temporary data during OAuth flow
+# In production (HTTPS), cookies must be Secure + SameSite=none for cross-domain OAuth flow
+_is_production = bool(settings.FRONTEND_URL and "localhost" not in settings.FRONTEND_URL)
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.SECRET_KEY or "your-secret-key-change-in-production",
-    max_age=3600,  # Session expires in 1 hour
-    same_site="lax"  # CSRF protection
+    max_age=3600,
+    same_site="none" if _is_production else "lax",
+    https_only=_is_production,
 )
 
 # Add CORS middleware
