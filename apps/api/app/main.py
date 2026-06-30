@@ -6,6 +6,7 @@ from app.core.database import init_database, close_db_connection
 from app.core.startup_checks import run_startup_checks
 from app.core.config import settings
 from app.core.turso_db import init_tables as init_turso
+from app.core.seeder import seed_test_user
 from contextlib import asynccontextmanager
 
 
@@ -31,6 +32,12 @@ async def lifespan(app: FastAPI):
     # Initialize database
     await init_database()
     print("Beanie initialized successfully")
+
+    # Seed default test user
+    try:
+        await seed_test_user()
+    except Exception as e:
+        print(f"Seed user warning (non-fatal): {e}")
 
     # Initialize Turso tables (cache + search history)
     try:
