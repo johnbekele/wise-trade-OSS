@@ -7,7 +7,10 @@ An AI-powered stock market analysis web application that combines real-time mark
 ## Table of Contents
 
 - [Overview](#overview)
-- [Features](#features)
+- [Features](#features)<img width="1440" height="724" alt="Screenshot 2026-07-01 at 10 58 37" src="https://github.com/user-attachments/assets/da188c72-87ee-437e-89e3-be40719f441d" />
+<img width="1440" height="724" alt="Screenshot 2026-07-01 at 10 59 23" src="https://github.com/user-attachments/assets/3bfb4f24-c8f0-471c-a94b-3cc9aaa6c9f2" />
+<img width="1440" height="724" alt="Screenshot 2026-07-01 at 10 59 23 (1)" src="https://github.com/user-attachments/assets/7fb37ba2-c95e-4986-8d91-ead5ff663920" />
+
 - [Demo Credentials](#demo-credentials)
 - [Tech Stack](#tech-stack)
 - [Architecture](#architecture)
