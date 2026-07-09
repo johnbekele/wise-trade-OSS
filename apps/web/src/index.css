@@ -33,6 +33,12 @@
     --ring: 221.2 83.2% 53.3%;
 
     --radius: 0.5rem;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --gradient-to: 250 83% 60%;
   }
  
   .dark {
@@ -151,5 +157,47 @@
 
   .badge-outline {
     @apply text-foreground;
+  }
+
+  .card-interactive {
+    @apply rounded-lg border bg-card text-card-foreground shadow-sm
+           transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer;
+  }
+
+  .skeleton {
+    @apply bg-gradient-to-r from-muted via-muted/60 to-muted bg-[length:200%_100%] animate-shimmer rounded;
+  }
+
+  .glass {
+    @apply bg-card/80 backdrop-blur-xl border border-white/20 shadow-xl;
+  }
+
+  .btn-gradient {
+    @apply bg-gradient-to-r from-[hsl(221.2,83.2%,53.3%)] to-[hsl(250,83%,60%)]
+           text-white h-10 px-4 py-2 rounded-md text-sm font-medium
+           hover:opacity-90 transition-opacity shadow-md;
+  }
+
+  .btn-sm {
+    @apply h-8 px-3 text-xs;
+  }
+
+  .step-dot {
+    @apply w-2.5 h-2.5 rounded-full border-2 transition-colors duration-300;
+  }
+  .step-dot-active {
+    @apply border-primary bg-primary;
+  }
+  .step-dot-pending {
+    @apply border-muted-foreground/30 bg-transparent;
+  }
+  .step-dot-done {
+    @apply border-green-500 bg-green-500;
+  }
+}
+
+@layer utilities {
+  .animate-fill-forwards {
+    animation-fill-mode: forwards;
   }
 }

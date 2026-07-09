@@ -26,23 +26,23 @@ export default function Layout({ children }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[0_1px_3px_-1px_rgba(0,0,0,0.1)]">
         <div className="flex h-16 items-center px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2 md:hidden">
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="btn btn-ghost p-0 w-10 h-10">
               <Menu className="h-6 w-6" />
             </button>
           </div>
-          
-          <div className="flex items-center gap-2 mr-4">
-            <div className="bg-primary/10 p-1.5 rounded-lg">
-              <TrendingUp className="h-6 w-6 text-primary" />
+
+          <div className="flex items-center gap-2.5 mr-4">
+            <div className="bg-gradient-to-br from-primary to-primary/70 p-1.5 rounded-lg shadow-sm">
+              <TrendingUp className="h-6 w-6 text-white" />
             </div>
             <h1 className="text-xl font-bold tracking-tight hidden sm:inline-block">Wise Trade</h1>
           </div>
-          
+
           <div className="flex-1" />
-          
+
           <div className="flex items-center gap-3">
             {isAuthenticated ? (
               <>
@@ -53,6 +53,7 @@ export default function Layout({ children }) {
                   </Link>
                 )}
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-secondary rounded-full">
+                  <div className="w-2 h-2 rounded-full bg-green-500" />
                   <User className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm font-medium">{user?.first_name || user?.username || 'User'}</span>
                   {isAdmin && (
@@ -79,8 +80,8 @@ export default function Layout({ children }) {
           <div className="h-full flex flex-col">
             <div className="h-16 flex items-center px-6 border-b lg:hidden">
               <div className="flex items-center gap-2">
-                <div className="bg-primary/10 p-1.5 rounded-lg">
-                  <TrendingUp className="h-6 w-6 text-primary" />
+                <div className="bg-gradient-to-br from-primary to-primary/70 p-1.5 rounded-lg">
+                  <TrendingUp className="h-6 w-6 text-white" />
                 </div>
                 <span className="font-bold text-lg">Wise Trade</span>
               </div>
@@ -88,40 +89,50 @@ export default function Layout({ children }) {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             <div className="flex-1 py-6 px-3 space-y-1">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-3 mb-3 font-semibold">Navigation</p>
               {navigation.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.href);
                 return (
-                  <Link key={item.name} to={item.href} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${active ? 'bg-secondary text-primary' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'}`}>
+                  <Link key={item.name} to={item.href} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-150 ${active ? 'bg-primary/10 text-primary border-r-2 border-primary font-semibold' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground hover:translate-x-0.5'}`}>
                     <Icon className={`h-4 w-4 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
                     {item.name}
                   </Link>
                 );
               })}
-              
+
               {isAdmin && (
-                <Link to="/admin" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive('/admin') ? 'bg-primary/10 text-primary border border-primary/20' : 'text-muted-foreground hover:bg-primary/5 hover:text-primary'}`}>
-                  <Shield className={`h-4 w-4 ${isActive('/admin') ? 'text-primary' : 'text-muted-foreground'}`} />
-                  Admin Panel
-                </Link>
+                <>
+                  <div className="pt-3 mt-3 border-t border-border">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-3 mb-3 font-semibold">Admin</p>
+                  </div>
+                  <Link to="/admin" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-150 ${isActive('/admin') ? 'bg-primary/10 text-primary border-r-2 border-primary font-semibold' : 'text-muted-foreground hover:bg-primary/5 hover:text-primary hover:translate-x-0.5'}`}>
+                    <Shield className={`h-4 w-4 ${isActive('/admin') ? 'text-primary' : 'text-muted-foreground'}`} />
+                    Admin Panel
+                  </Link>
+                </>
               )}
             </div>
-            
+
             {!isAuthenticated && (
               <div className="p-4 border-t">
-                <div className="bg-secondary/50 rounded-lg p-4">
+                <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-lg p-4 border border-primary/10">
                   <h4 className="text-sm font-semibold mb-1">Enterprise Plan</h4>
                   <p className="text-xs text-muted-foreground mb-3">Get advanced AI insights and unlimited data.</p>
-                  <Link to="/signup" className="btn btn-primary w-full text-xs h-8" onClick={() => setSidebarOpen(false)}>Upgrade Now</Link>
+                  <Link to="/signup" className="btn btn-gradient w-full text-xs h-8 inline-flex items-center justify-center rounded-md" onClick={() => setSidebarOpen(false)}>Upgrade Now</Link>
                 </div>
               </div>
             )}
+
+            <div className="p-4 border-t">
+              <p className="text-[10px] text-muted-foreground text-center">Wise Trade v1.0</p>
+            </div>
           </div>
         </aside>
 
-        <main className="flex-1 min-w-0 bg-muted/10 min-h-[calc(100vh-4rem)]">
+        <main className="flex-1 min-w-0 bg-muted/20 min-h-[calc(100vh-4rem)]">
           <div className="container max-w-7xl mx-auto p-4 lg:p-8 space-y-6">{children}</div>
         </main>
       </div>
