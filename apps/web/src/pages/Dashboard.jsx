@@ -4,7 +4,8 @@ import StockCard from '../components/StockCard';
 import StockSearch from '../components/StockSearch';
 import { useWatchlist, useMarketMovers } from '../hooks/useStocks';
 import { useAuth } from '../context/AuthContext';
-import { TrendingUp, TrendingDown, Activity, RefreshCw, BarChart3, Eye } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { TrendingUp, TrendingDown, Activity, RefreshCw, BarChart3, Eye, Sparkles, ArrowRight } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -75,6 +76,23 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* AI Feature CTA */}
+      <Link
+        to="/news"
+        className="card-interactive group flex items-center gap-5 p-5 border-l-4 border-l-primary bg-gradient-to-r from-primary/5 to-transparent animate-fade-in"
+      >
+        <div className="bg-gradient-to-br from-primary to-primary/70 p-2.5 rounded-lg shadow-sm flex-shrink-0">
+          <Sparkles className="h-5 w-5 text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-sm">Try AI Trading Insights</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Claude AI scans news from Bloomberg, Reuters, and social media, cross-references with live stock data, and delivers actionable market intelligence.
+          </p>
+        </div>
+        <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all flex-shrink-0" />
+      </Link>
 
       {/* Controls */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 justify-end">

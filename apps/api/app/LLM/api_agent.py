@@ -85,9 +85,14 @@ MARKET_IMPACT_SYNTHESIS_SYSTEM = """You are a senior portfolio strategist. You r
 
 Synthesize into a JSON object with this EXACT structure:
 
-{{"news_items": [{{"rank": 1, "title": "Event/headline", "impact_level": "high|medium|low", "impact_direction": "positive|negative|neutral", "why_it_matters": "Connect the news to actual market data - cite price moves, volume", "affected_sectors": ["sector1"], "affected_companies": ["TICKER1"], "trading_insight": "Specific actionable insight with entry/exit reasoning", "source": "source name", "data_signal": "Supporting market data pattern"}}]}}
+{{"news_items": [{{"rank": 1, "title": "Event/headline", "impact_level": "high|medium|low", "impact_direction": "positive|negative|neutral", "why_it_matters": "Connect the news to actual market data - cite price moves, volume. Be detailed and thorough.", "affected_sectors": ["sector1"], "affected_companies": ["TICKER1"], "trading_insight": "Specific actionable insight with entry/exit reasoning", "source": "source name (e.g. Bloomberg, Reuters, CNBC)", "source_url": "https://full-url-to-the-original-article-or-source", "data_signal": "Supporting market data pattern with specific numbers", "published_date": "YYYY-MM-DD or approximate date"}}]}}
 
-CRITICAL: Return ONLY valid JSON. Connect every news item to observable market data where possible."""
+CRITICAL RULES:
+1. Return ONLY valid JSON. Connect every news item to observable market data where possible.
+2. For source_url: include the ACTUAL URL from your web search results. If no exact URL, use the publication's homepage (e.g. https://www.reuters.com).
+3. For published_date: use the article's date or today's date if breaking news.
+4. For why_it_matters: be DETAILED — explain the full chain of cause and effect, cite specific data points.
+5. For trading_insight: provide specific, actionable advice with reasoning."""
 
 
 class APIAgent:
@@ -413,12 +418,14 @@ class APIAgent:
                     "title": str(item.get("title", "Unknown"))[:200],
                     "impact_level": item.get("impact_level", "medium").lower(),
                     "impact_direction": item.get("impact_direction", "neutral").lower(),
-                    "why_it_matters": str(item.get("why_it_matters", ""))[:500],
+                    "why_it_matters": str(item.get("why_it_matters", ""))[:800],
                     "affected_sectors": item.get("affected_sectors", []) if isinstance(item.get("affected_sectors"), list) else [],
                     "affected_companies": item.get("affected_companies", []) if isinstance(item.get("affected_companies"), list) else [],
-                    "trading_insight": str(item.get("trading_insight", ""))[:500],
+                    "trading_insight": str(item.get("trading_insight", ""))[:800],
                     "source": str(item.get("source", "Unknown"))[:100],
-                    "data_signal": str(item.get("data_signal", ""))[:300],
+                    "source_url": str(item.get("source_url", ""))[:500],
+                    "data_signal": str(item.get("data_signal", ""))[:500],
+                    "published_date": str(item.get("published_date", ""))[:20],
                 })
         return validated
 

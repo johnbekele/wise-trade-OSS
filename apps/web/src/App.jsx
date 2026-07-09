@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { AuthProvider } from './context/AuthContext'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import Dashboard from './pages/Dashboard'
 import StockDetail from './pages/StockDetail'
 import NewsAnalysis from './pages/NewsAnalysis'
@@ -14,6 +14,7 @@ import ResendVerification from './pages/ResendVerification'
 import AdminPanel from './pages/AdminPanel'
 import ApiKeys from './pages/ApiKeys'
 import ApiDocumentation from './pages/ApiDocumentation'
+import LandingPage from './pages/LandingPage'
 import Layout from './components/Layout'
 
 // Create React Query client
@@ -28,6 +29,24 @@ const queryClient = new QueryClient({
   },
 })
 
+function HomePage() {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LandingPage />;
+  }
+
+  return <Layout><Dashboard /></Layout>;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -41,9 +60,11 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/resend-verification" element={<ResendVerification />} />
-            
+
+            {/* Home: Landing page for guests, Dashboard for authenticated */}
+            <Route path="/" element={<HomePage />} />
+
             {/* App routes with layout */}
-            <Route path="/" element={<Layout><Dashboard /></Layout>} />
             <Route path="/stock/:symbol" element={<Layout><StockDetail /></Layout>} />
             <Route path="/news" element={<Layout><NewsAnalysis /></Layout>} />
             <Route path="/admin" element={<Layout><AdminPanel /></Layout>} />
@@ -59,4 +80,3 @@ function App() {
 }
 
 export default App
-

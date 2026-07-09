@@ -1,8 +1,12 @@
-import { useState, useCallback } from 'react';
-import { Newspaper, TrendingUp, RefreshCw, Search, AlertCircle, ArrowUp, ArrowDown, Minus, Building2, Lightbulb, CheckCircle, Target, Zap, Lock, LogIn, ChevronRight, Clock, History, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import {
+  TrendingUp, RefreshCw, Search, AlertCircle, ArrowUp, ArrowDown, Minus,
+  Lightbulb, CheckCircle, Target, Zap, Lock, ChevronRight, History,
+  Sparkles, ExternalLink, ChevronDown, ChevronUp, BarChart3, Globe,
+  Brain, LineChart, Newspaper, X
+} from 'lucide-react';
 import { useMarketImpactNews, useNewsAnalysis } from '../hooks/useNews';
 import { useSearchHistory } from '../hooks/useSearchHistory';
-import { getLogoProps } from '../utils/helpers';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 
@@ -78,6 +82,131 @@ function AnalysisRenderer({ text }) {
   );
 }
 
+function ImpactCardDetail({ item, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="relative bg-card border rounded-xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto animate-scale-in" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="sticky top-0 bg-card border-b p-5 flex items-start justify-between z-10">
+          <div className="flex-1 min-w-0 pr-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
+              <span className="px-2 py-0.5 bg-secondary rounded text-foreground">{item.source}</span>
+              {item.published_date && <span>{item.published_date}</span>}
+              <span>Rank #{item.rank}</span>
+            </div>
+            <h2 className="text-xl font-bold leading-tight">{item.title}</h2>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md transition-colors flex-shrink-0">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-6">
+          {/* Impact Badge */}
+          <div className="flex items-center gap-3">
+            <ImpactBadge level={item.impact_level} direction={item.impact_direction} />
+            {item.source_url && (
+              <a
+                href={item.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                View Source
+              </a>
+            )}
+          </div>
+
+          {/* Why It Matters */}
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">Why It Matters</h3>
+            <p className="text-sm leading-relaxed">{item.why_it_matters}</p>
+          </div>
+
+          {/* Trading Insight */}
+          {item.trading_insight && (
+            <div className="bg-primary/5 border border-primary/10 rounded-lg p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-primary mb-2 flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                Trading Insight
+              </h3>
+              <p className="text-sm leading-relaxed">{item.trading_insight}</p>
+            </div>
+          )}
+
+          {/* Data Signal */}
+          {item.data_signal && (
+            <div className="bg-muted/50 border rounded-lg p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-2">
+                <BarChart3 className="h-4 w-4" />
+                Supporting Data Signal
+              </h3>
+              <p className="text-sm leading-relaxed">{item.data_signal}</p>
+            </div>
+          )}
+
+          {/* Affected Companies & Sectors */}
+          {(item.affected_companies?.length > 0 || item.affected_sectors?.length > 0) && (
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">Affected</h3>
+              <div className="flex flex-wrap gap-2">
+                {item.affected_companies?.map((company, i) => (
+                  <span key={`c-${i}`} className="inline-flex items-center px-2.5 py-1 rounded-md bg-blue-500/10 text-blue-700 text-xs font-medium border border-blue-100">
+                    {company}
+                  </span>
+                ))}
+                {item.affected_sectors?.map((sector, i) => (
+                  <span key={`s-${i}`} className="inline-flex items-center px-2.5 py-1 rounded-md bg-secondary text-secondary-foreground text-xs font-medium border">
+                    {sector}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Source Link */}
+          {item.source_url && (
+            <div className="pt-4 border-t">
+              <a
+                href={item.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-sm text-primary hover:underline font-medium"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Read full article on {item.source}
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImpactBadge({ level, direction }) {
+  const dirIcon = direction === 'positive'
+    ? <ArrowUp className="w-3.5 h-3.5 text-green-600" />
+    : direction === 'negative'
+    ? <ArrowDown className="w-3.5 h-3.5 text-destructive" />
+    : <Minus className="w-3.5 h-3.5 text-muted-foreground" />;
+
+  const levelStyles = level === 'high'
+    ? 'bg-destructive/10 text-destructive border-destructive/20'
+    : level === 'medium'
+    ? 'bg-amber-50 text-amber-700 border-amber-200'
+    : 'bg-blue-50 text-blue-700 border-blue-200';
+
+  return (
+    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium ${levelStyles}`}>
+      {dirIcon}
+      {level} impact
+    </div>
+  );
+}
+
 const SUGGESTED_QUERIES = [
   'Impact of Fed rate decisions on tech stocks',
   'AI sector outlook this quarter',
@@ -88,6 +217,7 @@ const SUGGESTED_QUERIES = [
 export default function NewsAnalysis() {
   const [query, setQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
   const { isAuthenticated } = useAuth();
 
   const {
@@ -135,30 +265,12 @@ export default function NewsAnalysis() {
     analyze(historyQuery);
   };
 
-  const getImpactBadgeStyles = (level) => {
-    switch (level?.toLowerCase()) {
-      case 'high': return 'bg-destructive/10 text-destructive border-destructive/20';
-      case 'medium': return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'low': return 'bg-blue-50 text-blue-700 border-blue-200';
-      default: return 'bg-secondary text-secondary-foreground';
-    }
-  };
-
   const getImpactBorderColor = (level) => {
     switch (level?.toLowerCase()) {
       case 'high': return 'border-l-destructive';
       case 'medium': return 'border-l-amber-400';
       case 'low': return 'border-l-blue-400';
       default: return 'border-l-border';
-    }
-  };
-
-  const getImpactDirectionIcon = (direction) => {
-    switch (direction?.toLowerCase()) {
-      case 'positive': return <ArrowUp className="w-4 h-4 text-green-600" />;
-      case 'negative': return <ArrowDown className="w-4 h-4 text-destructive" />;
-      case 'neutral': return <Minus className="w-4 h-4 text-muted-foreground" />;
-      default: return null;
     }
   };
 
@@ -189,45 +301,79 @@ export default function NewsAnalysis() {
       </div>
 
       {!isAuthenticated ? (
-        <div className="card border-dashed">
-          <div className="card-content py-16 flex flex-col items-center text-center">
-            <div className="bg-gradient-to-br from-primary/10 to-primary/20 p-4 rounded-full mb-6">
-              <Lock className="w-10 h-10 text-primary" />
-            </div>
-            <h2 className="text-2xl font-bold mb-2">Authentication Required</h2>
-            <p className="text-muted-foreground max-w-md mb-8">
-              Sign in to access enterprise-grade market analysis and AI trading insights.
-            </p>
-            <div className="flex gap-4">
-              <Link to="/login" className="btn btn-gradient px-8 inline-flex items-center justify-center rounded-md">Sign In</Link>
-              <Link to="/signup" className="btn btn-outline px-8">Create Account</Link>
-            </div>
+        /* ── Unauthenticated: Full feature showcase ── */
+        <div className="space-y-8">
+          <div className="card border-dashed">
+            <div className="card-content py-16 flex flex-col items-center text-center">
+              <div className="bg-gradient-to-br from-primary/10 to-primary/20 p-4 rounded-full mb-6">
+                <Lock className="w-10 h-10 text-primary" />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Sign In to Access AI Analysis</h2>
+              <p className="text-muted-foreground max-w-lg mb-8 leading-relaxed">
+                Wise Trade uses Claude AI to scan financial news, analyze stock data from Yahoo Finance,
+                and deliver actionable trading insights — all in real-time.
+              </p>
+              <div className="flex gap-4 mb-12">
+                <Link to="/login" className="btn btn-gradient px-8 inline-flex items-center justify-center rounded-md">Sign In</Link>
+                <Link to="/signup" className="btn btn-outline px-8">Create Account</Link>
+              </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16 w-full max-w-4xl text-left">
-              {[
-                { icon: Target, title: 'Precise Impact Analysis', desc: 'Understand exactly how news affects specific sectors and companies.' },
-                { icon: Zap, title: 'Real-time Processing', desc: 'Analysis generated in seconds using advanced LLMs.' },
-                { icon: Lightbulb, title: 'Actionable Insights', desc: 'Clear trading signals and risk assessments.' },
-              ].map(({ icon: Icon, title, desc }) => (
-                <div key={title} className="space-y-2">
-                  <div className="bg-secondary w-10 h-10 rounded-lg flex items-center justify-center">
-                    <Icon className="w-5 h-5 text-primary" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-4xl text-left">
+                {[
+                  { icon: Newspaper, title: 'Market Impact Monitor', desc: 'AI detects high-impact news events and rates them by severity. Click any alert for full analysis, trading insights, and source citations.' },
+                  { icon: Search, title: 'Deep Dive Analysis', desc: 'Ask any market question. Claude researches news, stock data, and web intelligence, then streams a comprehensive report with specific data points.' },
+                  { icon: Globe, title: 'Multi-Source Intelligence', desc: 'Data from Yahoo Finance, Bloomberg, Reuters, CNBC, Reddit, X/Twitter, SEC filings — all synthesized into one coherent analysis.' },
+                ].map(({ icon: Icon, title, desc }) => (
+                  <div key={title} className="space-y-3">
+                    <div className="bg-secondary w-10 h-10 rounded-lg flex items-center justify-center">
+                      <Icon className="w-5 h-5 text-primary" />
+                    </div>
+                    <h3 className="font-semibold">{title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
                   </div>
-                  <h3 className="font-semibold">{title}</h3>
-                  <p className="text-sm text-muted-foreground">{desc}</p>
-                </div>
-              ))}
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* How it works for unauthenticated users */}
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title text-xl">How AI Analysis Works</h3>
+              <p className="card-description">Three phases of intelligence gathering and synthesis</p>
+            </div>
+            <div className="card-content">
+              <div className="grid md:grid-cols-3 gap-6">
+                {[
+                  { step: '1', icon: LineChart, title: 'Stock Data Collection', desc: 'Live quotes, market movers, volume analysis, and technical patterns from Yahoo Finance.' },
+                  { step: '2', icon: Globe, title: 'Web Intelligence Scan', desc: 'Claude searches news, social media, SEC filings, and global markets for signals.' },
+                  { step: '3', icon: Brain, title: 'AI Synthesis', desc: 'Both data streams are combined into a professional research report with cited sources.' },
+                ].map(({ step, icon: Icon, title, desc }) => (
+                  <div key={step} className="text-center">
+                    <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/70 text-white font-bold mb-4 shadow-sm">
+                      {step}
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-4 border">
+                      <Icon className="h-6 w-6 text-primary mx-auto mb-3" />
+                      <h4 className="font-semibold mb-1">{title}</h4>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
       ) : (
         <>
-          {/* Market Impact Section */}
+          {/* ── Market Impact Section ── */}
           <div className="card">
             <div className="card-header flex flex-row items-center justify-between">
               <div>
                 <h3 className="card-title text-xl">Market Impact Monitor</h3>
-                <p className="card-description">High-impact news events detected by AI (cached daily)</p>
+                <p className="card-description">
+                  AI-detected high-impact events from news, social media, and market data. Click any card for full detail.
+                </p>
               </div>
               <button
                 onClick={handleRefreshMarket}
@@ -247,75 +393,103 @@ export default function NewsAnalysis() {
               ) : marketImpactNews.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {marketImpactNews.map((item, index) => (
-                    <div
+                    <button
                       key={index}
-                      className={`card-interactive border-l-4 ${getImpactBorderColor(item.impact_level)} p-5 opacity-0 animate-fade-up animate-fill-forwards`}
+                      onClick={() => setSelectedItem(item)}
+                      className={`card-interactive border-l-4 ${getImpactBorderColor(item.impact_level)} p-5 text-left opacity-0 animate-fade-up animate-fill-forwards`}
                       style={{ animationDelay: `${index * 60}ms` }}
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="space-y-1 flex-1 min-w-0">
                           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                             <span className="px-2 py-0.5 bg-secondary rounded text-foreground">{item.source}</span>
-                            <span>Rank #{item.rank}</span>
+                            {item.published_date && <span>{item.published_date}</span>}
+                            <span>#{item.rank}</span>
                           </div>
                           <h4 className="font-bold text-base leading-tight line-clamp-2">
                             {item.title}
                           </h4>
                         </div>
-                        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium ml-3 flex-shrink-0 ${getImpactBadgeStyles(item.impact_level)}`}>
-                          {getImpactDirectionIcon(item.impact_direction)}
-                          {item.impact_level}
+                        <div className="ml-3 flex-shrink-0">
+                          <ImpactBadge level={item.impact_level} direction={item.impact_direction} />
                         </div>
                       </div>
 
-                      <div className="space-y-3">
-                        <div className="text-sm text-muted-foreground line-clamp-3">
-                          <span className="font-semibold text-foreground">Impact: </span>
-                          {item.why_it_matters}
-                        </div>
+                      <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{item.why_it_matters}</p>
 
-                        {(item.affected_companies?.length > 0 || item.affected_sectors?.length > 0) && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {item.affected_companies?.slice(0, 3).map((company, i) => (
-                              <span key={i} className="inline-flex items-center px-2 py-0.5 rounded bg-blue-500/10 text-blue-700 text-xs border border-blue-100">
-                                {company}
-                              </span>
-                            ))}
-                            {item.affected_sectors?.slice(0, 2).map((sector, i) => (
-                              <span key={i} className="inline-flex items-center px-2 py-0.5 rounded bg-secondary text-secondary-foreground text-xs border">
-                                {sector}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                      {/* Preview of trading insight */}
+                      {item.trading_insight && (
+                        <div className="text-xs text-primary/80 bg-primary/5 rounded px-2.5 py-1.5 mb-3 line-clamp-1">
+                          <Target className="w-3 h-3 inline mr-1" />
+                          {item.trading_insight}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap gap-1.5">
+                          {item.affected_companies?.slice(0, 3).map((company, i) => (
+                            <span key={i} className="inline-flex items-center px-2 py-0.5 rounded bg-blue-500/10 text-blue-700 text-[10px] border border-blue-100">
+                              {company}
+                            </span>
+                          ))}
+                          {(item.affected_companies?.length > 3) && (
+                            <span className="text-[10px] text-muted-foreground">+{item.affected_companies.length - 3} more</span>
+                          )}
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-12 text-muted-foreground">
-                  No high-impact news detected at this moment. Click Refresh to analyze.
+                /* Empty state with explanation */
+                <div className="py-12 text-center">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-muted rounded-full mb-6">
+                    <Newspaper className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">No Market Impact Events Yet</h3>
+                  <p className="text-muted-foreground max-w-md mx-auto mb-6 text-sm leading-relaxed">
+                    The Market Impact Monitor uses Claude AI to scan financial news from Bloomberg, Reuters, CNBC,
+                    social media (Reddit, X), and SEC filings. It cross-references this with real-time stock data
+                    from Yahoo Finance to surface the most impactful events.
+                  </p>
+                  <div className="flex flex-wrap gap-3 justify-center text-xs text-muted-foreground mb-6">
+                    {['Bloomberg', 'Reuters', 'CNBC', 'Yahoo Finance', 'Reddit', 'SEC Filings'].map(source => (
+                      <span key={source} className="px-2.5 py-1 bg-secondary rounded-full">{source}</span>
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleRefreshMarket}
+                    disabled={loadingMarket || refreshing}
+                    className="btn btn-gradient inline-flex items-center justify-center rounded-md"
+                  >
+                    <Zap className="w-4 h-4 mr-2" />
+                    Run AI Analysis Now
+                  </button>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Custom Analysis Section */}
+          {/* ── Deep Dive Analysis Section ── */}
           <div className="card">
             <div className="card-header">
               <h3 className="card-title text-xl">Deep Dive Analysis</h3>
-              <p className="card-description">Ask Claude to analyze specific companies, sectors, or market trends</p>
+              <p className="card-description">
+                Ask Claude to analyze any company, sector, or market trend.
+                It searches the web, pulls stock data, and streams a professional research report.
+              </p>
             </div>
             <div className="card-content space-y-4">
               <form onSubmit={handleAnalyze} className="flex gap-3">
-                <div className="relative flex-1 group">
+                <div className="relative flex-1">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   <input
                     type="text"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="e.g. Impact of interest rate hikes on tech stocks..."
-                    className="input pl-9 focus:ring-primary/50"
+                    className="input pl-9"
                     disabled={loadingAnalysis}
                   />
                 </div>
@@ -335,16 +509,38 @@ export default function NewsAnalysis() {
 
               {/* Suggested queries */}
               {!loadingAnalysis && !showAnalysisContainer && (
-                <div className="flex flex-wrap gap-2">
-                  {SUGGESTED_QUERIES.map(q => (
-                    <button
-                      key={q}
-                      onClick={() => { setQuery(q); }}
-                      className="text-xs px-3 py-1.5 rounded-full border hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
-                    >
-                      {q}
-                    </button>
-                  ))}
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground font-medium">Try asking:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {SUGGESTED_QUERIES.map(q => (
+                      <button
+                        key={q}
+                        onClick={() => setQuery(q)}
+                        className="text-xs px-3 py-1.5 rounded-full border hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Data sources info (shown when idle) */}
+              {!loadingAnalysis && !showAnalysisContainer && !isError && (
+                <div className="bg-muted/20 rounded-lg border p-4 mt-2">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">When you submit a query, Claude will:</p>
+                  <div className="grid sm:grid-cols-3 gap-3">
+                    {[
+                      { icon: LineChart, text: 'Pull live stock data and market movers from Yahoo Finance' },
+                      { icon: Globe, text: 'Search news, social media, and financial publications for relevant intelligence' },
+                      { icon: Brain, text: 'Synthesize both into an actionable research report with citations' },
+                    ].map(({ icon: Icon, text }) => (
+                      <div key={text} className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <Icon className="h-3.5 w-3.5 text-primary flex-shrink-0 mt-0.5" />
+                        <span>{text}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -352,7 +548,6 @@ export default function NewsAnalysis() {
               {loadingAnalysis && phase && phase !== 'done' && (
                 <div className="p-5 rounded-lg border bg-card animate-fade-in">
                   <div className="flex items-center gap-0 mb-4">
-                    {/* Step 1: Collecting */}
                     <div className="flex items-center gap-2">
                       <div className={`step-dot ${
                         phase === 'collecting' ? 'step-dot-active animate-pulse' :
@@ -363,7 +558,6 @@ export default function NewsAnalysis() {
                       </span>
                     </div>
                     <div className={`flex-1 h-px mx-3 transition-colors duration-500 ${['synthesizing', 'cached', 'done'].includes(phase) ? 'bg-green-500' : 'bg-border'}`} />
-                    {/* Step 2: Synthesizing */}
                     <div className="flex items-center gap-2">
                       <div className={`step-dot ${
                         phase === 'synthesizing' || phase === 'cached' ? 'step-dot-active animate-pulse' :
@@ -374,19 +568,17 @@ export default function NewsAnalysis() {
                       </span>
                     </div>
                     <div className={`flex-1 h-px mx-3 transition-colors duration-500 ${phase === 'done' ? 'bg-green-500' : 'bg-border'}`} />
-                    {/* Step 3: Complete */}
                     <div className="flex items-center gap-2">
                       <div className={`step-dot ${phase === 'done' ? 'step-dot-done' : 'step-dot-pending'}`} />
                       <span className="text-xs font-medium text-muted-foreground">Complete</span>
                     </div>
                   </div>
-                  {/* Progress bar */}
                   <div className="h-1 bg-muted rounded-full overflow-hidden">
                     <div className="h-full w-1/4 bg-primary rounded-full animate-progress-indeterminate" />
                   </div>
                   <p className="text-sm text-muted-foreground mt-3">{getPhaseMessage()}</p>
                   {phase === 'collecting' && (
-                    <p className="text-xs text-muted-foreground/60 mt-1">Searching financial news, analyzing stock data, and scanning the web...</p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">Pulling stock quotes from Yahoo Finance and searching financial news, social media, and SEC filings...</p>
                   )}
                 </div>
               )}
@@ -399,7 +591,7 @@ export default function NewsAnalysis() {
                 </div>
               )}
 
-              {/* Unified analysis container (streaming + final) */}
+              {/* Unified analysis container */}
               {showAnalysisContainer && (
                 <div className="rounded-lg border bg-card overflow-hidden animate-fade-in">
                   <div className="flex items-center justify-between p-4 border-b bg-muted/30">
@@ -429,7 +621,7 @@ export default function NewsAnalysis() {
             </div>
           </div>
 
-          {/* Search History Section */}
+          {/* ── Search History ── */}
           {searchHistory.length > 0 && (
             <div className="card">
               <div className="card-header">
@@ -437,11 +629,11 @@ export default function NewsAnalysis() {
                   <History className="w-5 h-5" />
                   Recent Searches
                 </h3>
-                <p className="card-description">Your recent deep dive analyses</p>
+                <p className="card-description">Your recent deep dive analyses — click to re-run</p>
               </div>
               <div className="card-content">
                 <div className="space-y-1">
-                  {searchHistory.map((item, index) => (
+                  {searchHistory.map((item) => (
                     <button
                       key={item.id}
                       onClick={() => handleHistoryClick(item.query)}
@@ -465,6 +657,11 @@ export default function NewsAnalysis() {
             </div>
           )}
         </>
+      )}
+
+      {/* Detail Modal */}
+      {selectedItem && (
+        <ImpactCardDetail item={selectedItem} onClose={() => setSelectedItem(null)} />
       )}
     </div>
   );
