@@ -19,7 +19,6 @@ export function useMarketImpactNews(limit = 10, options = {}) {
     staleTime: Infinity,
     refetchInterval: false,
     refetchOnWindowFocus: false,
-    enabled: false, // Never auto-fetch — only run when user explicitly triggers
     ...options,
   });
 
@@ -29,15 +28,7 @@ export function useMarketImpactNews(limit = 10, options = {}) {
     return data;
   }, [limit, queryClient]);
 
-  const fetchOnce = useCallback(async () => {
-    const existing = queryClient.getQueryData(['marketImpactNews', limit]);
-    if (existing) return existing;
-    const data = await fetchMarketImpactNews(limit, false);
-    queryClient.setQueryData(['marketImpactNews', limit], data);
-    return data;
-  }, [limit, queryClient]);
-
-  return { ...query, forceRefresh, fetchOnce };
+  return { ...query, forceRefresh };
 }
 
 /**

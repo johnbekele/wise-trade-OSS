@@ -5,30 +5,51 @@ import StockSearch from '../components/StockSearch';
 import { useWatchlist, useMarketMovers } from '../hooks/useStocks';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Activity, RefreshCw, BarChart3, Eye, Sparkles, ArrowRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, RefreshCw, Eye, Sparkles, ArrowRight } from 'lucide-react';
+
+function MarketMoverList({ title, icon: Icon, iconColor, items, loading, onItemClick, formatValue }) {
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-5 py-4 border-b flex items-center gap-2">
+        <Icon className={`h-4 w-4 ${iconColor}`} />
+        <h3 className="text-sm font-semibold">{title}</h3>
+      </div>
+      <div className="divide-y">
+        {loading ? (
+          [1, 2, 3, 4, 5].map(i => <div key={i} className="h-11 skeleton mx-4 my-1.5 rounded" />)
+        ) : (
+          items?.slice(0, 5).map((stock, index) => (
+            <button
+              key={index}
+              onClick={() => onItemClick(stock.ticker)}
+              className="flex items-center justify-between w-full px-5 py-2.5 hover:bg-muted/50 transition-colors text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground w-4 tabular-nums">{index + 1}</span>
+                <span className="text-sm font-medium">{stock.ticker}</span>
+                {stock.price && (
+                  <span className="text-xs text-muted-foreground tabular-nums">${stock.price}</span>
+                )}
+              </div>
+              <span className="text-xs font-medium tabular-nums">{formatValue(stock)}</span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [watchlist, setWatchlist] = useState(['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN']);
 
-  const {
-    data: stockData = [],
-    isLoading,
-    isError,
-    refetch: refetchStocks
-  } = useWatchlist(watchlist);
-
-  const {
-    data: marketMovers,
-    isLoading: loadingMovers,
-    refetch: refetchMovers
-  } = useMarketMovers();
+  const { data: stockData = [], isLoading, isError, refetch: refetchStocks } = useWatchlist(watchlist);
+  const { data: marketMovers, isLoading: loadingMovers, refetch: refetchMovers } = useMarketMovers();
 
   const handleAddStock = (symbol) => {
-    if (!watchlist.includes(symbol)) {
-      setWatchlist([...watchlist, symbol]);
-    }
+    if (!watchlist.includes(symbol)) setWatchlist([...watchlist, symbol]);
   };
 
   const handleRemoveStock = (symbol) => {
@@ -42,244 +63,131 @@ export default function Dashboard() {
 
   const stockDataMap = {};
   stockData.forEach((item, index) => {
-    if (!item.error) {
-      stockDataMap[watchlist[index]] = item;
-    }
+    if (!item.error) stockDataMap[watchlist[index]] = item;
   });
 
-  const now = new Date();
-  const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
-  const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
   return (
     <div className="space-y-8">
-      {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-primary/5 via-primary/10 to-transparent rounded-xl p-6 border border-primary/10 animate-fade-in">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">{greeting}, {user?.first_name || user?.username || 'Trader'}</h2>
-            <p className="text-muted-foreground text-sm mt-1">{dateStr}</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-center px-4 py-2 bg-card rounded-lg border shadow-sm">
-              <div className="text-2xl font-bold tabular-nums">{watchlist.length}</div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Watchlist</div>
-            </div>
-            <div className="text-center px-4 py-2 bg-card rounded-lg border shadow-sm">
-              <div className="text-2xl font-bold tabular-nums text-green-600">{marketMovers?.top_gainers?.length || 0}</div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Gainers</div>
-            </div>
-            <div className="text-center px-4 py-2 bg-card rounded-lg border shadow-sm">
-              <div className="text-2xl font-bold tabular-nums text-destructive">{marketMovers?.top_losers?.length || 0}</div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Losers</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* AI Feature CTA */}
-      <Link
-        to="/news"
-        className="card-interactive group flex items-center gap-5 p-5 border-l-4 border-l-primary bg-gradient-to-r from-primary/5 to-transparent animate-fade-in"
-      >
-        <div className="bg-gradient-to-br from-primary to-primary/70 p-2.5 rounded-lg shadow-sm flex-shrink-0">
-          <Sparkles className="h-5 w-5 text-white" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-sm">Try AI Trading Insights</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Claude AI scans news from Bloomberg, Reuters, and social media, cross-references with live stock data, and delivers actionable market intelligence.
-          </p>
-        </div>
-        <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all flex-shrink-0" />
-      </Link>
-
-      {/* Controls */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 justify-end">
-        <div className="w-full sm:w-64">
-          <StockSearch onSelect={handleAddStock} />
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Markets Overview</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{dateStr}</p>
         </div>
         <button
           onClick={handleRefresh}
           disabled={isLoading || loadingMovers}
-          className="btn btn-outline whitespace-nowrap"
+          className="btn btn-outline h-9 px-3 text-sm"
         >
-          <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`mr-2 h-3.5 w-3.5 ${(isLoading || loadingMovers) ? 'animate-spin' : ''}`} />
           Refresh
         </button>
       </div>
 
-      {/* Market Movers Section */}
+      {/* AI CTA Banner */}
+      <Link
+        to="/news"
+        className="flex items-center gap-4 p-4 rounded-lg border bg-primary/[0.03] hover:bg-primary/[0.06] transition-colors group"
+      >
+        <Sparkles className="h-5 w-5 text-primary flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <span className="text-sm font-medium">AI Trading Insights</span>
+          <span className="text-sm text-muted-foreground ml-2 hidden sm:inline">
+            — Market impact analysis, deep dive research, and real-time intelligence
+          </span>
+        </div>
+        <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+      </Link>
+
+      {/* Market Movers */}
       <div className="grid gap-4 md:grid-cols-3">
-        {/* Gainers */}
-        <div className="card border-l-4 border-l-green-500 overflow-hidden">
-          <div className="card-header pb-2">
-            <div className="text-sm font-medium text-muted-foreground">Top Gainers</div>
-            <h3 className="text-xl font-bold flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-green-500" />
-              Market Leaders
-            </h3>
-          </div>
-          <div className="card-content">
-            <div className="space-y-1">
-              {loadingMovers ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map(i => <div key={i} className="h-10 skeleton" />)}
-                </div>
-              ) : (
-                marketMovers?.top_gainers?.slice(0, 5).map((stock, index) => (
-                  <button
-                    key={index}
-                    onClick={() => navigate(`/stock/${stock.ticker}`)}
-                    className="flex items-center justify-between w-full px-2 py-2 rounded-md hover:bg-muted/50 transition-colors text-left"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground w-4 tabular-nums">#{index + 1}</span>
-                      <div className="font-semibold text-sm">{stock.ticker}</div>
-                      <div className="text-xs text-muted-foreground hidden xl:block tabular-nums">${stock.price}</div>
-                    </div>
-                    <div className="text-xs font-medium text-green-600 bg-green-500/10 px-2 py-1 rounded tabular-nums">
-                      +{parseFloat(stock.change_percentage).toFixed(2)}%
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Losers */}
-        <div className="card border-l-4 border-l-destructive overflow-hidden">
-          <div className="card-header pb-2">
-            <div className="text-sm font-medium text-muted-foreground">Top Losers</div>
-            <h3 className="text-xl font-bold flex items-center gap-2">
-              <TrendingDown className="h-5 w-5 text-destructive" />
-              Market Laggards
-            </h3>
-          </div>
-          <div className="card-content">
-            <div className="space-y-1">
-              {loadingMovers ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map(i => <div key={i} className="h-10 skeleton" />)}
-                </div>
-              ) : (
-                marketMovers?.top_losers?.slice(0, 5).map((stock, index) => (
-                  <button
-                    key={index}
-                    onClick={() => navigate(`/stock/${stock.ticker}`)}
-                    className="flex items-center justify-between w-full px-2 py-2 rounded-md hover:bg-muted/50 transition-colors text-left"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground w-4 tabular-nums">#{index + 1}</span>
-                      <div className="font-semibold text-sm">{stock.ticker}</div>
-                      <div className="text-xs text-muted-foreground hidden xl:block tabular-nums">${stock.price}</div>
-                    </div>
-                    <div className="text-xs font-medium text-destructive bg-destructive/10 px-2 py-1 rounded tabular-nums">
-                      {parseFloat(stock.change_percentage).toFixed(2)}%
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Active */}
-        <div className="card border-l-4 border-l-blue-500 overflow-hidden">
-          <div className="card-header pb-2">
-            <div className="text-sm font-medium text-muted-foreground">Most Active</div>
-            <h3 className="text-xl font-bold flex items-center gap-2">
-              <Activity className="h-5 w-5 text-blue-500" />
-              High Volume
-            </h3>
-          </div>
-          <div className="card-content">
-            <div className="space-y-1">
-              {loadingMovers ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map(i => <div key={i} className="h-10 skeleton" />)}
-                </div>
-              ) : (
-                marketMovers?.most_actively_traded?.slice(0, 5).map((stock, index) => (
-                  <button
-                    key={index}
-                    onClick={() => navigate(`/stock/${stock.ticker}`)}
-                    className="flex items-center justify-between w-full px-2 py-2 rounded-md hover:bg-muted/50 transition-colors text-left"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground w-4 tabular-nums">#{index + 1}</span>
-                      <div className="font-semibold text-sm">{stock.ticker}</div>
-                    </div>
-                    <div className="text-xs text-muted-foreground tabular-nums">
-                      {parseInt(stock.volume).toLocaleString()}
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+        <MarketMoverList
+          title="Top Gainers"
+          icon={TrendingUp}
+          iconColor="text-green-600"
+          items={marketMovers?.top_gainers}
+          loading={loadingMovers}
+          onItemClick={(ticker) => navigate(`/stock/${ticker}`)}
+          formatValue={(stock) => (
+            <span className="text-green-600">+{parseFloat(stock.change_percentage).toFixed(2)}%</span>
+          )}
+        />
+        <MarketMoverList
+          title="Top Losers"
+          icon={TrendingDown}
+          iconColor="text-destructive"
+          items={marketMovers?.top_losers}
+          loading={loadingMovers}
+          onItemClick={(ticker) => navigate(`/stock/${ticker}`)}
+          formatValue={(stock) => (
+            <span className="text-destructive">{parseFloat(stock.change_percentage).toFixed(2)}%</span>
+          )}
+        />
+        <MarketMoverList
+          title="Most Active"
+          icon={Activity}
+          iconColor="text-primary"
+          items={marketMovers?.most_actively_traded}
+          loading={loadingMovers}
+          onItemClick={(ticker) => navigate(`/stock/${ticker}`)}
+          formatValue={(stock) => (
+            <span className="text-muted-foreground">{parseInt(stock.volume).toLocaleString()}</span>
+          )}
+        />
       </div>
 
-      {/* Watchlist Section */}
+      {/* Watchlist */}
       <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <Eye className="h-5 w-5 text-muted-foreground" />
-          <div>
-            <h3 className="text-xl font-semibold tracking-tight">
-              Your Watchlist
-              <span className="ml-2 text-xs font-medium text-muted-foreground bg-secondary px-2 py-0.5 rounded-full align-middle">
-                {watchlist.length} stocks
-              </span>
-            </h3>
-            <p className="text-sm text-muted-foreground">Track your favorite stocks in real-time</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Eye className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-lg font-semibold tracking-tight">Watchlist</h2>
+            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{watchlist.length}</span>
+          </div>
+          <div className="w-56">
+            <StockSearch onSelect={handleAddStock} />
           </div>
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="h-48 skeleton rounded-lg"></div>
-            ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3, 4].map(i => <div key={i} className="h-44 skeleton rounded-lg" />)}
           </div>
         ) : isError ? (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-8 text-center text-destructive">
-            <p className="font-medium">Error loading watchlist data</p>
-            <button onClick={refetchStocks} className="btn btn-outline border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground mt-4">
+          <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-8 text-center">
+            <p className="text-sm text-destructive font-medium">Failed to load watchlist data</p>
+            <button onClick={refetchStocks} className="btn btn-outline text-sm h-8 mt-3 border-destructive/30 text-destructive hover:bg-destructive hover:text-destructive-foreground">
               Retry
             </button>
           </div>
         ) : watchlist.length === 0 ? (
-          <div className="text-center py-16 border-2 border-dashed rounded-lg bg-gradient-to-b from-muted/20 to-transparent">
-            <TrendingUp className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium">Your watchlist is empty</h3>
-            <p className="text-muted-foreground mb-6">Search for stocks above to start tracking them.</p>
+          <div className="text-center py-12 border-2 border-dashed rounded-lg">
+            <p className="text-sm text-muted-foreground">Search for stocks above to start tracking them.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {watchlist.map((symbol, index) => (
               <div
                 key={symbol}
                 className="group relative opacity-0 animate-fade-up animate-fill-forwards"
-                style={{ animationDelay: `${index * 60}ms` }}
+                style={{ animationDelay: `${index * 50}ms` }}
               >
                 <button
                   onClick={() => handleRemoveStock(symbol)}
-                  className="absolute -top-2 -right-2 z-10 p-1.5 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-destructive/90"
-                  title="Remove from watchlist"
+                  className="absolute -top-1.5 -right-1.5 z-10 p-1 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm text-xs"
+                  title="Remove"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
-                <div className="h-full">
-                  <StockCard
-                    symbol={symbol}
-                    data={stockDataMap[symbol]}
-                    onClick={() => navigate(`/stock/${symbol}`)}
-                  />
-                </div>
+                <StockCard
+                  symbol={symbol}
+                  data={stockDataMap[symbol]}
+                  onClick={() => navigate(`/stock/${symbol}`)}
+                />
               </div>
             ))}
           </div>

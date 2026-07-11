@@ -60,18 +60,18 @@ export default function LandingPage() {
     <div className="min-h-screen bg-background">
       {/* Navigation */}
       <nav className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="bg-gradient-to-br from-primary to-primary/70 p-1.5 rounded-lg shadow-sm">
-              <TrendingUp className="h-6 w-6 text-white" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex h-14 items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="bg-primary p-1.5 rounded-lg">
+              <TrendingUp className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold tracking-tight">Wise Trade</span>
+            <span className="text-base font-bold tracking-tight">Wise Trade</span>
           </div>
           <div className="flex items-center gap-3">
-            <Link to="/login" className="btn btn-ghost text-sm">Sign In</Link>
-            <Link to="/signup" className="btn btn-gradient inline-flex items-center justify-center rounded-md text-sm">
+            <Link to="/login" className="btn btn-ghost h-8 px-3 text-sm">Sign In</Link>
+            <Link to="/signup" className="btn btn-primary h-8 px-4 text-sm">
               Get Started
-              <ArrowRight className="ml-1.5 h-4 w-4" />
+              <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Link>
           </div>
         </div>
