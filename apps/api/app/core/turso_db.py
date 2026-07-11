@@ -112,16 +112,19 @@ def save_history(user_id: str, query: str, result_text: str):
 
 def get_history(user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
     """Get recent search history for a user."""
-    conn = _get_conn()
-    rows = conn.execute(
-        """SELECT id, query, result_text, created_at
-           FROM search_history
-           WHERE user_id = ?
-           ORDER BY created_at DESC
-           LIMIT ?""",
-        [user_id, limit],
-    ).fetchall()
-    return [
-        {"id": r[0], "query": r[1], "result_text": r[2], "created_at": r[3]}
-        for r in rows
-    ]
+    try:
+        conn = _get_conn()
+        rows = conn.execute(
+            """SELECT id, query, result_text, created_at
+               FROM search_history
+               WHERE user_id = ?
+               ORDER BY created_at DESC
+               LIMIT ?""",
+            [user_id, limit],
+        ).fetchall()
+        return [
+            {"id": r[0], "query": r[1], "result_text": r[2], "created_at": r[3]}
+            for r in rows
+        ]
+    except Exception:
+        return []

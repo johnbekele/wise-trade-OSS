@@ -224,7 +224,8 @@ export default function NewsAnalysis() {
     data: marketImpactData,
     isLoading: loadingMarket,
     forceRefresh: forceRefreshMarket,
-  } = useMarketImpactNews(10, { enabled: isAuthenticated });
+    fetchOnce: fetchMarketOnce,
+  } = useMarketImpactNews(10);
 
   const {
     analyze,
@@ -255,6 +256,15 @@ export default function NewsAnalysis() {
     setRefreshing(true);
     try {
       await forceRefreshMarket();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleLoadMarket = async () => {
+    setRefreshing(true);
+    try {
+      await fetchMarketOnce();
     } finally {
       setRefreshing(false);
     }
@@ -372,21 +382,28 @@ export default function NewsAnalysis() {
               <div>
                 <h3 className="card-title text-xl">Market Impact Monitor</h3>
                 <p className="card-description">
-                  AI-detected high-impact events from news, social media, and market data. Click any card for full detail.
+                  AI-detected high-impact events from news, social media, and market data.
+                  {marketImpactData?.fetched_at && (
+                    <span className="ml-1">
+                      Last updated: {new Date(marketImpactData.fetched_at).toLocaleString()}
+                    </span>
+                  )}
                 </p>
               </div>
-              <button
-                onClick={handleRefreshMarket}
-                disabled={loadingMarket || refreshing}
-                className="btn btn-ghost btn-sm"
-                title="Force refresh — re-runs AI analysis"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${(loadingMarket || refreshing) ? 'animate-spin' : ''}`} />
-                {refreshing ? 'Refreshing...' : 'Refresh'}
-              </button>
+              {marketImpactNews.length > 0 && (
+                <button
+                  onClick={handleRefreshMarket}
+                  disabled={loadingMarket || refreshing}
+                  className="btn btn-ghost btn-sm"
+                  title="Re-run AI analysis with fresh data"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${(loadingMarket || refreshing) ? 'animate-spin' : ''}`} />
+                  {refreshing ? 'Analyzing...' : 'Re-run'}
+                </button>
+              )}
             </div>
             <div className="card-content">
-              {loadingMarket ? (
+              {(loadingMarket || refreshing) && !marketImpactNews.length ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[1, 2, 3, 4].map(i => <div key={i} className="h-48 skeleton rounded-lg" />)}
                 </div>
@@ -442,16 +459,16 @@ export default function NewsAnalysis() {
                   ))}
                 </div>
               ) : (
-                /* Empty state with explanation */
+                /* Empty state — user must explicitly trigger */
                 <div className="py-12 text-center">
-                  <div className="inline-flex items-center justify-center w-16 h-16 bg-muted rounded-full mb-6">
-                    <Newspaper className="w-8 h-8 text-muted-foreground" />
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-6">
+                    <Newspaper className="w-8 h-8 text-primary" />
                   </div>
-                  <h3 className="text-lg font-semibold mb-2">No Market Impact Events Yet</h3>
-                  <p className="text-muted-foreground max-w-md mx-auto mb-6 text-sm leading-relaxed">
-                    The Market Impact Monitor uses Claude AI to scan financial news from Bloomberg, Reuters, CNBC,
-                    social media (Reddit, X), and SEC filings. It cross-references this with real-time stock data
-                    from Yahoo Finance to surface the most impactful events.
+                  <h3 className="text-lg font-semibold mb-2">Run Market Impact Analysis</h3>
+                  <p className="text-muted-foreground max-w-lg mx-auto mb-6 text-sm leading-relaxed">
+                    Click below to have Claude AI scan financial news from Bloomberg, Reuters, CNBC,
+                    social media (Reddit, X), and SEC filings. It will cross-reference this with real-time stock data
+                    from Yahoo Finance and surface the most impactful market events with actionable trading insights.
                   </p>
                   <div className="flex flex-wrap gap-3 justify-center text-xs text-muted-foreground mb-6">
                     {['Bloomberg', 'Reuters', 'CNBC', 'Yahoo Finance', 'Reddit', 'SEC Filings'].map(source => (
@@ -459,13 +476,25 @@ export default function NewsAnalysis() {
                     ))}
                   </div>
                   <button
-                    onClick={handleRefreshMarket}
+                    onClick={handleLoadMarket}
                     disabled={loadingMarket || refreshing}
-                    className="btn btn-gradient inline-flex items-center justify-center rounded-md"
+                    className="btn btn-gradient inline-flex items-center justify-center rounded-md px-8 h-11"
                   >
-                    <Zap className="w-4 h-4 mr-2" />
-                    Run AI Analysis Now
+                    {refreshing ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4 mr-2" />
+                        Run AI Analysis
+                      </>
+                    )}
                   </button>
+                  <p className="text-[10px] text-muted-foreground/60 mt-3">
+                    Analysis typically takes 15-30 seconds. Results are cached for 24 hours.
+                  </p>
                 </div>
               )}
             </div>

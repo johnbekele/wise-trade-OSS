@@ -134,5 +134,6 @@ async def get_search_history(
             None, turso_db.get_history, user_id, limit
         )
         return {"history": history}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching search history: {str(e)}")
+    except Exception:
+        # Return empty history if database is unavailable
+        return {"history": []}
