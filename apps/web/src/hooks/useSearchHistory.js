@@ -6,7 +6,11 @@ export function useSearchHistory(limit = 20, options = {}) {
   return useQuery({
     queryKey: ['searchHistory', limit],
     queryFn: async () => {
-      const response = await axios.get(`${API_BASE_URL}/ai/search-history`, { params: { limit } });
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/ai/search-history`, {
+        params: { limit },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       return response.data;
     },
     staleTime: 60000,

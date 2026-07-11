@@ -6,7 +6,11 @@ import { API_BASE_URL } from '../config/config';
 const fetchMarketImpactNews = async (limit = 10, forceRefresh = false) => {
   const params = { limit };
   if (forceRefresh) params.force_refresh = true;
-  const response = await axios.get(`${API_BASE_URL}/ai/market-impact`, { params });
+  const token = localStorage.getItem('token');
+  const response = await axios.get(`${API_BASE_URL}/ai/market-impact`, {
+    params,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   return { ...response.data, fetched_at: new Date().toISOString() };
 };
 
@@ -153,7 +157,11 @@ export function useCachedNewsAnalysis(query) {
   return useQuery({
     queryKey: ['newsAnalysis', query],
     queryFn: async () => {
-      const response = await axios.get(`${API_BASE_URL}/ai/analyze-news`, { params: { query } });
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/ai/analyze-news`, {
+        params: { query },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       return response.data;
     },
     enabled: false,
