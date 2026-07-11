@@ -150,3 +150,5 @@ async def get_market_movers():
         "top_losers": [format_stock(s) for s in data.get("losers", [])],
         "most_actively_traded": [format_stock(s) for s in data.get("most_active", [])]
     }
+
+

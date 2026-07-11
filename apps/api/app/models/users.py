@@ -23,6 +23,7 @@ class User(Document):
     created_at: datetime = Field(default=datetime.now())
     updated_at: datetime = Field(default=datetime.now())
     
+    
     def to_dict_with_id(self) -> dict:
         """Convert to dict with string id"""
         data = self.model_dump()
